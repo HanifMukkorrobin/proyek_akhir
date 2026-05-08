@@ -1,0 +1,26 @@
+{
+  "name": "app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@iconify/vue": "^5.0.0",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@pinia/nuxt": "^0.11.3",
+    "axios": "^1.15.0",
+    "cesium": "^1.141.0",
+    "daisyui": "^4.12.24",
+    "dotenv": "^17.4.1",
+    "highcharts": "^12.5.0",
+    "nuxt": "^4.4.2",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4"
+  }
+}

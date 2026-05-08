@@ -1,0 +1,242 @@
+# PROJECT STATUS
+
+## Current Objective
+- Build backend foundation for final project: Implementasi Visualisasi Persebaran Data Menggunakan Peta 3D dan Simulasi Rute Efisien Visitasi Dosen ke Rumah Mahasiswa (Studi Kasus: Persebaran Domisili Mahasiswa PJJ IT PENS Angkatan 2023).
+
+## Current Phase
+- Backend Foundation Complete + Activity Log UI API Wiring Complete + Non-admin Chart/3D Map Dashboard Complete
+
+## Summary Status
+- Observed: Lumen 10 project scaffold exists in `api/`.
+- Observed: app can connect to PostgreSQL database `project_ta` using current `.env`.
+- Observed: tables discovered: `public.mahasiswa`, `public.wilayah`.
+- Observed: official project scope has been clarified from stakeholder brief.
+- Observed: public endpoint `/public/get-wilayah` is implemented and returning ordered array data.
+- Observed: public wilayah API processing has been moved into repository layer under `app/Repositories`.
+- Observed: address classification engine and testing endpoint are implemented in repository-first architecture.
+- Observed: classifier output now reaches desa level and marks ambiguous cases with `needs_confirmation`.
+- Observed: optional external geocoding integration via OpenStreetMap Nominatim is implemented as fallback.
+- Observed: Nominatim query source now uses internal manual mapping output, not raw address.
+- Observed: tokenizer output no longer includes numeric tokens, reducing address noise in matching.
+- Observed: classifier now enriches ranking with administrative hints (prov/kab/kec/desa), emits related region candidates per level, and validates parent-child hierarchy consistency in mapping output.
+- Observed: classifier now supports common regional aliases (e.g. JATIM/JABAR), adaptive fuzzy threshold by token length, calibrated confidence score, and top-3 candidate output for ambiguous mapping review.
+- Observed: geocoding process flow documentation is now available for implementation reference and troubleshooting.
+- Observed: mahasiswa CRUD API is now implemented in repository-first style with reusable global pagination helper.
+- Observed: create/update mahasiswa flow now derives `wilayah_id`, `latitude`, and `longitude` from address classification/geocoding pipeline.
+- Observed: create mahasiswa flow now always generates `mahasiswa_id` as UUID and does not rely on client-supplied ID.
+- Observed: mahasiswa GET responses now include embedded `wilayah` object via relation mapping.
+- Observed: active API endpoints now use standardized response envelope with keys `code`, `data`, `message`, and `errors`.
+- Observed: paginated mahasiswa endpoint now follows custom pagination envelope `code`, `data`, `error`, `message` with localized pagination keys.
+- Observed: mahasiswa import now supports two-step flow (scan/classify then confirm insert) with draft import ID.
+- Observed: template Excel download endpoint for mahasiswa import is available.
+- Observed: import workflow logic has been consolidated into `MahasiswaRepository` so mahasiswa domain operations are handled in a single repository.
+- Observed: authentication module is now available with multilevel roles (`admin`, `dosen`, `mahasiswa`) and token-based login endpoint.
+- Observed: auth tables (`users`, `auth_tokens`) have been added via migrations and seeded with default demo accounts.
+- Observed: non-public APIs now require login token header through `auth.token` middleware.
+- Observed: token extraction and token validity checks are handled by dedicated auth helper functions.
+- Observed: Nuxt 4 frontend project has been initialized in `app/` using minimal template.
+- Observed: frontend dependencies now include Tailwind CSS module, Pinia, and Axios with initial Nuxt configuration.
+- Observed: DaisyUI framework is now integrated on top of Tailwind for consistent component styling.
+- Observed: Nuxt production build now succeeds after disabling `cssnano` in Nuxt PostCSS config due local `csso/css-tree` compatibility issue.
+- Observed: frontend API base URL now uses dotenv-backed `.env` variable `NUXT_PUBLIC_API_BASE`.
+- Observed: initial landing page is now implemented with responsive layout and persistent light/dark mode toggle.
+- Observed: landing header has been simplified by removing `NuklirVisit3D` text and switching theme control to icon-only button.
+- Observed: landing overlap bug after DaisyUI adoption has been resolved by renaming local `hero` class to `hero-section` to avoid DaisyUI component class collision.
+- Observed: landing page styling now uses Tailwind + DaisyUI utility/component classes only (custom `<style>` block removed).
+- Observed: landing icon usage now uses Iconify (`@iconify/vue`) replacing inline SVG assets.
+- Observed: admin area routes are grouped under `pages/admin/**` while auth login is exposed separately at `pages/auth/login`.
+- Observed: admin dashboard UI has been redesigned to match portal reference and now uses reusable components (`admin layout`, sidebar, topbar, stat card, chart panel, activity table).
+- Observed: admin dashboard is now wired to protected dashboard APIs for summary cards, Highcharts distribution chart, and expandable wilayah table tree.
+- Observed: GeoVisit PJJ IT reference design has replaced the previous landing/admin visual system across landing, login, dashboard, logs, mahasiswa, and user management screens.
+- Observed: admin visual routes now include `/admin/dashboard`, `/admin/data-master`, `/admin/mahasiswa`, `/admin/users`, `/admin/log`, and `/admin/log-simulasi` redirecting to the unified logs route.
+- Observed: mahasiswa admin view is now wired to protected `/mahasiswa` API for list/search/pagination, create, update, and delete.
+- Observed: mahasiswa import modal is now wired to two-phase import API (`scan` then `confirm`) with Excel template download and selectable valid rows.
+- Observed: mahasiswa import now accepts Excel `.xlsx` templates with only `nama` and `alamat` columns; `dibuat_oleh_user_id` is no longer included in the template.
+- Observed: admin auth protection is now centralized in the admin layout while preserving the existing login store flow.
+- Observed: Nuxt production build succeeds after the GeoVisit PJJ IT UI replacement.
+- Observed: Local route smoke test returned HTTP 200 for `/`, `/auth/login`, `/admin/dashboard`, `/admin/mahasiswa`, `/admin/users`, `/admin/log`, and `/admin/log-simulasi`.
+- Observed: live `users` table previously stored role directly in `role` with check constraint `admin/dosen/mahasiswa`.
+- Observed: `usergroups` table is now added as separate role/group master table, and `users.usergroup_id` is now the required FK.
+- Observed: user CRUD API is available under protected `/users` routes with pagination, search, filters, detail, create, update, delete, and reset password support.
+- Observed: login response still returns `role` as compatibility alias derived from related `usergroup.kode`.
+- Observed: admin User Management view is now wired to protected `/users` API for list/search/filter/pagination, create, update, delete, and direct reset password.
+- Observed: admin Dashboard view is now wired to protected `/dashboard/summary`, `/dashboard/chart`, and `/dashboard/wilayah-tree` endpoints.
+- Observed: activity log API is now available with database-backed list/detail/summary endpoints and centralized HTTP request logging middleware.
+- Observed: login success/failure is recorded explicitly without storing bearer tokens or password payloads.
+- Observed: admin Log Aktivitas view is now wired to protected `/activity-logs` API for summary, search/filter/pagination, detail modal, and current-page CSV export.
+- Observed: non-admin chart dashboard route `/dashboard/chart` is implemented with the GeoVisit reference layout and uses protected dashboard summary/chart/wilayah-tree APIs.
+- Observed: login redirect now sends admin users to `/admin/dashboard` and non-admin users to `/dashboard/chart`; auth store persists user payload with the bearer token for route-level display.
+- Observed: Nuxt production build succeeds after adding `/dashboard/chart`.
+- Observed: Local route smoke test returned HTTP 200 for `/dashboard/chart` and `/auth/login` on dev server port 3001.
+- Observed: CesiumJS is installed in the Nuxt app and configured with a public Cesium ion token runtime config.
+- Observed: non-admin 3D map route `/dashbord/map` is implemented with `/dashboard/map` alias, full-bleed Cesium viewer, map console, search/fly-to, zoom controls, API-backed wilayah markers, student search markers, and visit arcs.
+- Observed: `public/cesium` static assets, including `Cesium.js`, are generated from `node_modules/cesium/Build/Cesium` by Nuxt config and ignored in app gitignore.
+- Observed: 3D map loads Cesium through `/cesium/Cesium.js` global script instead of Vite dynamic import to avoid dev-server `@fs` optimized dependency 404.
+- Observed: Nuxt production build succeeds after adding the Cesium map route.
+- Observed: Local route smoke test returned HTTP 200 for `/dashbord/map` and `/dashboard/map` on dev server port 3001.
+- Observed: dashboard analytics API now includes additive non-admin chart metadata while preserving existing summary/chart/tree fields.
+- Observed: protected 3D map APIs are available under `/dashboard/map/*` for zoom-driven wilayah points, region mahasiswa lists, and mahasiswa map search results.
+- Observed: non-admin 3D map frontend now consumes `/dashboard/map/wilayah-points`, `/dashboard/map/wilayah/{wilayahId}/mahasiswa`, and `/dashboard/map/mahasiswa-search`.
+- Observed: Cesium map rendering is optimized with per-level marker limits, reduced labels/arcs, disabled heavy visual effects, and on-demand scene rendering.
+- Observed: dashboard map query path now computes `has_child` in the main aggregation, applies `parent_id` inside the mahasiswa aggregate, and local DB indexes for active `mahasiswa.wilayah_id` have been migrated successfully.
+- Observed: bulk wilayah markers now render through Cesium primitive collections with payload caching and no repeated bounds refetch while drilling within a fixed parent area.
+- Observed: region and search markers now sample Cesium terrain height asynchronously and render slightly above the terrain surface using cached ground heights.
+- Observed: kabupaten/kecamatan/desa fetches are now scoped to the currently selected parent wilayah only, and `flyToIndonesia` resets the map through the lightweight province cache before animating.
+- Observed: map drilldown is now click-first; region clicks fetch child wilayah directly, while zoom/pan only affects camera and terrain sync.
+- Observed: wilayah and mahasiswa selections now re-center the camera into a terrain-relative top-down view, and direct mahasiswa marker clicks follow the same focus behavior as list selections.
+- Observed: kabupaten, kecamatan, and desa now render scoped region labels again with per-level label limits and distance-based fading.
+- Observed: province labels in the default Indonesia-wide view now use larger typography and stronger opacity so they stay readable against the satellite base layer.
+- Observed: admin views now expose an on-screen theme toggle again, and the remaining admin pages/modals/tables have been normalized to use shared theme-aware tokens instead of hard-coded light surfaces.
+- Observed: the legacy `/admin/dashboard` Highcharts view now re-renders against the active theme palette when dark/light mode changes.
+
+## Done
+- Created AGENTS.md.
+- Created PROJECT_STATUS.md.
+- Created TASKS.md.
+- Created docs/decisions.md.
+- Created docs/handoffs/HANDOFF_TEMPLATE.md.
+- Added agent runtime artifact rules in .gitignore.
+- Installed/repair PHP and Composer toolchain via Homebrew.
+- Created Laravel Lumen project in `api/`.
+- Enabled facades and Eloquent in `api/bootstrap/app.php`.
+- Updated `api/.env` and `api/.env.example` to use PostgreSQL defaults.
+- Read live schema from PostgreSQL (tables, columns, and primary keys).
+- Added table-mapped models in `api/app/Models/Mahasiswa.php` and `api/app/Models/Wilayah.php`.
+- Added `GET /public/get-wilayah` endpoint with `wilayah_id` child filter and `cari` parent-to-match path filter.
+- Refactored `PublicWilayahController` to delegate business logic to `PublicWilayahRepository`.
+- Added `AddressWilayahClassifierRepository` and `WilayahDictionaryRepository` for alamat-to-wilayah mapping pipeline.
+- Added `POST /public/test-klasifikasi-alamat` endpoint with default sample dataset for service verification.
+- Tuned classifier scoring and dictionary loading so village-level (`level=5`) matches are selected when valid.
+- Added `NominatimGeocodingRepository` and optional fallback path when internal mapping is uncertain or lacks coordinates.
+- Updated classifier flow so external geocoding request query is composed from mapped wilayah hierarchy (desa/kecamatan/kabupaten/provinsi).
+- Updated tokenization so all numeric tokens and numeric n-grams are removed before matching.
+- Optimized classifier with administrative hint extraction/scoring and hierarchy consistency validation inspired by external reference matcher flow.
+- Implemented accuracy quick wins: alias key expansion in dictionary, adaptive fuzzy matching threshold, and confidence-based ambiguity handling with top candidate suggestions.
+- Added dedicated documentation for geocoding pipeline flow (internal mapping + external Nominatim fallback) in docs.
+- Added global reusable pagination helper and wired it into `GET /mahasiswa` listing endpoint.
+- Added mahasiswa CRUD endpoints (`GET/POST/PUT/PATCH/DELETE`) with automatic geocoding-derived wilayah and coordinate population on save/update.
+- Enforced UUID generation for `mahasiswa_id` in save flow to keep ID format consistent across records.
+- Added mahasiswa-to-wilayah relation output so list/detail responses include `wilayah` object payload.
+- Standardized controller responses using shared base helper so success and error payloads follow one schema.
+- Applied requested pagination response contract for mahasiswa listing (`halaman_sekarang`, `per_halaman`, `total_data`, `total_halaman`).
+- Added import API tahap 1 (`/mahasiswa/import/scan`) for CSV parsing, data validation, and alamat classification before import confirmation.
+- Added import API tahap 2 (`/mahasiswa/import/confirm`) for final data insertion using scanned draft and selectable row list.
+- Added endpoint `/mahasiswa/import/template` for downloadable Excel template.
+- Refactored import implementation by merging previous `MahasiswaImportRepository` logic into `MahasiswaRepository` and updating controller dependency.
+- Added login API endpoint `/auth/login` that returns bearer token and user role information.
+- Added schema migrations for `users` and `auth_tokens`, plus auth seeder for default role accounts.
+- Added middleware protection for non-public routes (`/mahasiswa` and import endpoints) using login token.
+- Added dedicated auth token helper for bearer/token header parsing and token validity verification.
+- Bootstrapped Nuxt 4 frontend project in `app/` and installed base dependencies.
+- Installed and configured frontend packages: `@nuxtjs/tailwindcss`, `@pinia/nuxt`, `pinia`, and `axios`.
+- Added Nuxt runtime config baseline (`public.apiBase`) and Axios plugin provider for API client initialization.
+- Verified Nuxt development server startup with Tailwind module enabled.
+- Fixed Nuxt production build failure by disabling `cssnano` in Nuxt PostCSS plugins and validating `npm run build` end-to-end.
+- Added `dotenv` dependency in Nuxt app and wired runtime `public.apiBase` to `NUXT_PUBLIC_API_BASE` from `.env`.
+- Added frontend env template and local env baseline in `app/.env.example` and `app/.env`.
+- Replaced default Nuxt welcome screen with branded landing page using base colors `#20893A` and `#FFFFFF`, gradient background, staggered animation, and mobile-first layout.
+- Added persistent light/dark mode support in landing page via localStorage + system preference fallback.
+- Refined landing header UI by removing brand text and changing light/dark control to icon-only toggle.
+- Added DaisyUI plugin configuration with custom `light` and `dark` themes, then migrated landing buttons/cards/badge/toggle to DaisyUI component classes.
+- Fixed DaisyUI layout collision by replacing local `hero` selector with `hero-section` so landing content no longer stacks in one grid cell.
+- Refactored landing page to utility-first implementation and removed custom CSS declarations from `app/app.vue`.
+- Added Iconify package and migrated theme-toggle icons to Iconify components.
+- Restructured admin routing with `pages/admin/**` for admin area and `pages/auth/login` for login entry, including `/admin` smart redirect page.
+- Implemented new admin dashboard portal view using reusable components and Highcharts-based bar/pie charts.
+- Replaced old frontend visual design with GeoVisit PJJ IT reference design across landing, login, admin shell, dashboard, logs, mahasiswa/import modal, and user/reset modal.
+- Added visual-first admin routes for mahasiswa, users, logs, log-simulasi redirect, and data master placeholder while keeping backend wiring deferred.
+- Added `usergroups` table and migrated existing `users.role` values into `users.usergroup_id`.
+- Implemented protected user CRUD API with filter/search pagination and reset password endpoint.
+- Updated User Management display data to reflect username, usergroup, mahasiswa link, last login, and status fields.
+- Wired User Management frontend to `/users` CRUD and reset password API with minimal table columns and modal-based actions.
+- Wired Mahasiswa frontend to `/mahasiswa` CRUD and two-phase import APIs with API-shaped table columns, form modals, delete modal, and import preview/confirmation flow.
+- Updated mahasiswa import template from CSV to Excel and removed `dibuat_oleh_user_id` from the template columns.
+- Wired Dashboard frontend to `/dashboard/summary`, `/dashboard/chart`, and `/dashboard/wilayah-tree` with summary cards, Highcharts chart, and expand/collapse table tree.
+- Added activity log schema, model, repository, controller, routes, and middleware so API requests are recorded into `activity_logs`.
+- Added manual login activity logging for success, validation failure, invalid credential, and server error outcomes.
+- Wired Log Aktivitas frontend to `/activity-logs`, `/activity-logs/summary`, and `/activity-logs/{logId}` with API-shaped table, filters, pagination, recent events, top modules, and detail modal.
+- Added non-admin `/dashboard/chart` page using the GeoVisit chart reference layout and existing protected dashboard APIs.
+- Updated login redirect and auth localStorage persistence for admin vs non-admin dashboard entry.
+- Added CesiumJS dependency and Nuxt asset/runtime config for Cesium ion.
+- Added non-admin `/dashbord/map` page with Cesium 3D map, GeoVisit reference overlays, and `/dashboard/map` alias.
+- Switched Cesium loading to generated `/cesium/Cesium.js` script asset to prevent Vite optimized dependency load failures.
+- Linked Chart Mode and 3D Map Mode between `/dashboard/chart` and `/dashbord/map`.
+- Extended dashboard analytics API with additive summary/chart metadata for non-admin chart mode while preserving existing admin fields.
+- Added protected 3D map APIs: `/dashboard/map/wilayah-points`, `/dashboard/map/wilayah/{wilayahId}/mahasiswa`, and `/dashboard/map/mahasiswa-search`.
+- Wired `/dashbord/map` Cesium frontend to zoom-driven wilayah points, region mahasiswa lists, and mahasiswa search result markers.
+- Optimized `/dashbord/map` Cesium rendering by reducing point/entity volume, disabling terrain/fog/bloom/lighting, using request-render mode, and throttling camera refresh.
+- Optimized dashboard map API by folding `has_child` into the main aggregate query, applying `parent_id` filtering before grouping, and adding/applying active `mahasiswa.wilayah_id` indexes via migration.
+- Optimized kecamatan-level map rendering by switching bulk wilayah points to Cesium primitive collections, caching point payloads, reducing deeper-level limits, and suppressing bounds refetch when a drilldown parent is already fixed.
+- Added terrain-aware marker placement for `/dashbord/map` by loading world terrain asynchronously and sampling/caching ground heights for visible region and search markers.
+- Hardened `/dashbord/map` reset flow by making `flyToIndonesia` reuse cached province payloads and by blocking global child-level fetches unless a matching parent wilayah is actively selected.
+- Replaced zoom-driven child-level data transitions with click-driven drilldown plus breadcrumb/back navigation in `/dashbord/map`.
+- Centered wilayah and mahasiswa selections into a near-vertical top-down camera view with terrain-relative focus heights, and made direct mahasiswa marker clicks use the same focus flow.
+- Restored region labels for kabupaten and deeper drilldown levels using smaller per-level label budgets and distance-based visibility controls.
+- Increased province label readability in the national view by strengthening font size, far-distance opacity, background alpha, and outline weight.
+- Audited frontend theme coverage and normalized the remaining admin shell/pages/modals that still used hard-coded light backgrounds, borders, and hover states.
+- Re-enabled the admin topbar theme toggle and made the legacy admin dashboard chart react to `data-theme` changes.
+
+## In Progress
+- None.
+
+## Blockers / Risks
+- Actual production database credentials are unknown.
+- Foreign key constraints are not defined in current database, so model relationships are not auto-generated.
+- Route simulation business rules and optimization constraints are not defined yet.
+- Final route simulation data contract is not defined yet.
+- Frontend production build currently skips `cssnano` minification as compatibility workaround, which may slightly increase CSS output size.
+- `npm install cesium` reported 5 dependency audit findings; no automatic fix was applied.
+
+## Recently Touched Areas
+- .gitignore
+- AGENTS.md
+- PROJECT_STATUS.md
+- TASKS.md
+- docs/decisions.md
+- docs/handoffs/HANDOFF_TEMPLATE.md
+- api/
+- app/
+- app/app/pages/dashboard/chart.vue
+- app/app/pages/dashbord/map.vue
+- app/app/pages/auth/login.vue
+- app/app/stores/auth.ts
+- app/nuxt.config.ts
+- app/package.json
+- app/package-lock.json
+- app/.env.example
+- app/.gitignore
+- api/app/Repositories/DashboardRepository.php
+- api/app/Repositories/DashboardMapRepository.php
+- api/database/migrations/2026_05_07_000002_add_dashboard_map_indexes.php
+- api/app/Http/Controllers/DashboardController.php
+- api/app/Http/Controllers/DashboardMapController.php
+- api/routes/web.php
+
+## Assumptions / Unknowns
+- Assumption: connection in `api/.env` points to active working local DB.
+- Unknown: final production DB host/credential strategy.
+- Unknown: route optimization method and objective function.
+- Unknown: required response schema for final route simulation.
+
+## Next Recommended Steps
+- Define route simulation inputs, constraints, and expected output.
+- Run browser performance check on `/dashbord/map` with live API data and tune marker limits per device if needed.
+- Validate terrain marker accuracy and loading impact on target internet conditions, since world terrain sampling adds async requests outside the local API.
+- Validate the revised drilldown UX in browser: child levels now require an explicit selected parent region before zoom-driven fetch occurs.
+- Validate the click-first drilldown UX in browser and tune whether parent clicks should also open mahasiswa details or stay navigation-only.
+- Validate the new top-down selection framing in browser and tune per-level focus heights if some scopes still feel too high or too close.
+- Tune deeper-level label budgets if kecamatan/desa still feel too dense on lower-end devices.
+- Check whether province labels still need slightly larger background padding after live browser review on wide desktop screens.
+- Run a browser pass across admin pages/modal flows in both light and dark mode to catch any remaining contrast edge cases after the token migration.
+- Consider pre-aggregated materialized map summaries if global kabupaten/kecamatan queries need to scale beyond current local dataset.
+- Add automated tests for public wilayah endpoint behavior.
+- Apply repository pattern to next public/private API endpoints.
+- Add automated tests for classifier endpoint and confidence scoring edge cases.
+- Review and tune ambiguous village matches from real production samples.
+- Validate outbound connectivity and Nominatim usage policy compliance in deployment environment.
+- Add monitoring for Nominatim timeout/rate-limit behavior.
+- Optionally collapse duplicate terms in token chunks (e.g. repeated village names) for cleaner token list.
+- Add migration files to codify schema in source control.
+- Evaluate whether CSS minification can be safely re-enabled after upstream `csso/css-tree` compatibility update.
+- Align deployment/runtime environment to define `NUXT_PUBLIC_API_BASE` per target stage.
+- Wire remaining visual-first admin logs screen to live backend APIs when endpoint contracts are ready.

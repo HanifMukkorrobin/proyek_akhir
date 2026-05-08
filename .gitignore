@@ -1,0 +1,10 @@
+# Agent runtime artifacts
+docs/handoffs/
+agent-temp/
+agent-cache/
+.agent-state/
+.agent-work/
+
+# Dependencies
+/api/vendor/
+/app/node_modules/
