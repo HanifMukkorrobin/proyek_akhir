@@ -182,8 +182,12 @@ class MahasiswaRepository
         $resolvedUseExternal = $useExternalGeocoding;
 
         if ($resolvedUseExternal === null) {
-            $resolvedUseExternal = $this->resolveUseExternalFromEnv();
+            $resolvedUseExternal = false;
         }
+
+        // Disable execution time limit — import besar + external geocoding
+        // bisa memakan waktu lama karena request HTTP berurutan.
+        set_time_limit(0);
 
         $scannedRows = [];
         $importableCount = 0;
@@ -386,33 +390,65 @@ class MahasiswaRepository
 
     private function applyDefaultAddressIfInvalid(string $alamat, array $geocodingPayload): array
     {
-        $isInvalid = $alamat === ''
-            || ($geocodingPayload['reference']['mapping_status'] ?? 'unmatched') === 'unmatched'
-            || ($geocodingPayload['reference']['needs_confirmation'] ?? true) === true
-            || $geocodingPayload['wilayah_id'] === null;
+        $isInvalid = $this->needsManualReview($alamat, $geocodingPayload);
 
         if ($isInvalid) {
+            $reference = $geocodingPayload['reference'] ?? [];
+            $reference['needs_review'] = true;
+            $reference['review_reason'] = $this->buildReviewReason($alamat, $geocodingPayload);
+
             return [
-                'alamat' => 'Politeknik Elektronika Surabaya, Jl. Raya ITS, Keputih, Sukolilo, Surabaya, Jawa Timur',
+                'alamat' => $alamat,
                 'geocoding_payload' => [
-                    'wilayah_id' => '001035078009001',
-                    'latitude' => -7.275766980349144,
-                    'longitude' => 112.79378525896956,
-                    'reference' => [
-                        'mapping_status' => 'matched',
-                        'needs_confirmation' => false,
-                        'confidence_score' => 1.0,
-                        'geocoding_source' => 'default',
-                        'external_geocoding_used' => false,
-                    ],
+                    'wilayah_id' => null,
+                    'latitude' => null,
+                    'longitude' => null,
+                    'reference' => $reference,
                 ]
             ];
         }
+
+        $geocodingPayload['reference']['needs_review'] = false;
 
         return [
             'alamat' => $alamat,
             'geocoding_payload' => $geocodingPayload,
         ];
+    }
+
+    private function needsManualReview(string $alamat, array $geocodingPayload): bool
+    {
+        return $alamat === ''
+            || ($geocodingPayload['reference']['mapping_status'] ?? 'unmatched') === 'unmatched'
+            || ($geocodingPayload['reference']['needs_confirmation'] ?? true) === true
+            || $geocodingPayload['wilayah_id'] === null;
+    }
+
+    private function buildReviewReason(string $alamat, array $geocodingPayload): string
+    {
+        if ($alamat === '') {
+            return 'Alamat wajib diisi.';
+        }
+
+        if (($geocodingPayload['reference']['mapping_status'] ?? 'unmatched') === 'unmatched') {
+            return 'Alamat belum cocok dengan data wilayah internal.';
+        }
+
+        if ($geocodingPayload['wilayah_id'] === null) {
+            return 'Wilayah internal belum dapat ditentukan.';
+        }
+
+        if (($geocodingPayload['reference']['needs_confirmation'] ?? true) === true) {
+            $score = $geocodingPayload['reference']['confidence_score'] ?? null;
+
+            if ($score !== null) {
+                return 'Klasifikasi alamat perlu review manual; confidence ' . round(((float) $score) * 100) . '%.';
+            }
+
+            return 'Klasifikasi alamat perlu review manual.';
+        }
+
+        return 'Alamat perlu review manual.';
     }
 
     private function scanImportRow(array $row, bool $useExternalGeocoding): array
@@ -432,10 +468,16 @@ class MahasiswaRepository
             'longitude' => null,
             'geocoding_source' => null,
             'external_geocoding_used' => null,
+            'needs_review' => null,
+            'review_reason' => null,
         ];
 
         if ($nama === '') {
             $alasan[] = 'Kolom nama wajib diisi.';
+        }
+
+        if ($alamat === '') {
+            $alasan[] = 'Kolom alamat wajib diisi.';
         }
 
         if (empty($alasan)) {
@@ -455,16 +497,27 @@ class MahasiswaRepository
                 || $wilayahId === null;
 
             if ($isInvalid) {
-                $alamat = 'Politeknik Elektronika Surabaya, Jl. Raya ITS, Keputih, Sukolilo, Surabaya, Jawa Timur';
+                $reviewReason = $this->buildReviewReason($alamat, [
+                    'wilayah_id' => $wilayahId,
+                    'reference' => [
+                        'mapping_status' => $classification['mapping']['status'] ?? null,
+                        'needs_confirmation' => $classification['needs_confirmation'] ?? null,
+                        'confidence_score' => $classification['mapping']['confidence']['score'] ?? null,
+                    ],
+                ]);
+
+                $alasan[] = $reviewReason;
                 $hasilKlasifikasi = [
-                    'status_mapping' => 'matched',
-                    'needs_confirmation' => false,
-                    'confidence_score' => 1.0,
-                    'wilayah_id' => '001035078009001',
-                    'latitude' => -7.275766980349144,
-                    'longitude' => 112.79378525896956,
-                    'geocoding_source' => 'default',
-                    'external_geocoding_used' => false,
+                    'status_mapping' => $classification['mapping']['status'] ?? null,
+                    'needs_confirmation' => $classification['needs_confirmation'] ?? null,
+                    'confidence_score' => $classification['mapping']['confidence']['score'] ?? null,
+                    'wilayah_id' => null,
+                    'latitude' => null,
+                    'longitude' => null,
+                    'geocoding_source' => $classification['geocoding']['source'] ?? null,
+                    'external_geocoding_used' => $classification['external_geocoding']['used'] ?? false,
+                    'needs_review' => true,
+                    'review_reason' => $reviewReason,
                 ];
             } else {
                 $hasilKlasifikasi = [
@@ -476,6 +529,8 @@ class MahasiswaRepository
                     'longitude' => $classification['geocoding']['longitude'] ?? null,
                     'geocoding_source' => $classification['geocoding']['source'] ?? null,
                     'external_geocoding_used' => $classification['external_geocoding']['used'] ?? false,
+                    'needs_review' => false,
+                    'review_reason' => null,
                 ];
             }
         }
@@ -1092,10 +1147,10 @@ class MahasiswaRepository
 
     private function resolveUseExternalFromEnv(): bool
     {
-        $resolved = filter_var((string) env('NOMINATIM_ENABLED', 'true'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $resolved = filter_var((string) env('NOMINATIM_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
         if ($resolved === null) {
-            return true;
+            return false;
         }
 
         return $resolved;

@@ -27,7 +27,19 @@ class AuthUserSeeder extends Seeder
             ->value('mahasiswa_id');
 
         $now = Carbon::now();
+        $defaultPassword = 'P@ssw0rd';
+        $passwordHash = Hash::make($defaultPassword);
         $rows = [];
+
+        if (!empty($existingUsernames)) {
+            DB::table('users')
+                ->whereIn('username', $existingUsernames)
+                ->update([
+                    'password' => $passwordHash,
+                    'diubah_pada' => $now,
+                    'diubah_oleh_user_id' => null,
+                ]);
+        }
 
         if (!in_array('admin', $existingUsernames, true)) {
             $rows[] = [
@@ -35,7 +47,7 @@ class AuthUserSeeder extends Seeder
                 'nama' => 'Administrator',
                 'username' => 'admin',
                 'email' => 'admin@example.com',
-                'password' => Hash::make('password123'),
+                'password' => $passwordHash,
                 'usergroup_id' => $userGroups['admin'],
                 'mahasiswa_id' => null,
                 'status_aktif' => true,
@@ -55,7 +67,7 @@ class AuthUserSeeder extends Seeder
                 'nama' => 'Dosen Demo',
                 'username' => 'dosen',
                 'email' => 'dosen@example.com',
-                'password' => Hash::make('password123'),
+                'password' => $passwordHash,
                 'usergroup_id' => $userGroups['dosen'],
                 'mahasiswa_id' => null,
                 'status_aktif' => true,
@@ -75,7 +87,7 @@ class AuthUserSeeder extends Seeder
                 'nama' => 'Mahasiswa Demo',
                 'username' => 'mahasiswa',
                 'email' => 'mahasiswa@example.com',
-                'password' => Hash::make('password123'),
+                'password' => $passwordHash,
                 'usergroup_id' => $userGroups['mahasiswa'],
                 'mahasiswa_id' => $mahasiswaId,
                 'status_aktif' => true,

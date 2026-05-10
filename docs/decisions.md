@@ -416,6 +416,22 @@
 - Impact: Admin pages now have direct theme switching again, remaining light-only panels are normalized, and the old admin chart no longer stays in a light palette after switching to dark mode.
 - Follow-up: Run a browser pass across admin pages and modal flows in both modes to catch any residual contrast issues.
 
+## DEC-053
+- Date: 2026-05-10
+- Context: User requested faster and higher-quality mahasiswa import without external geocoding after 200-row scan took several minutes.
+- Decision: Make import scan internal-only by default, keep Nominatim opt-in, stop silent PENS fallback for weak classifications, and tighten internal classifier candidate selection.
+- Rationale: Public Nominatim has a 1.1s/request throttle and is not suitable for bulk import speed; internal-only classification is fast enough but must avoid false-valid defaults.
+- Impact: 200-row scans can run under the target time when internal-only, while ambiguous rows are returned for review instead of imported with fake coordinates.
+- Follow-up: Validate against the real import file and tune aliases/stop-words for rows marked `needs_review`.
+
+## DEC-054
+- Date: 2026-05-10
+- Context: Latest internal-only import scan produced 79 importable and 144 review rows from 223 total.
+- Decision: Improve internal-only classifier by parsing jammed administrative markers, locking explicit admin hints to their level, aligning anchors with explicit admin hints, requiring distinct-token hierarchy support, and adding the `MEDAYU UTARA` alias for `Medokan Ayu`.
+- Rationale: The real failures were mostly ambiguous single-token matches and malformed address markers, not missing external coordinates.
+- Impact: Same 223-row draft now scans to 105 importable, 90 empty-address rejects, and 28 non-empty review rows in under 1 second locally.
+- Follow-up: Fill missing addresses in the import file and add a managed alias table for remaining recurring local abbreviations.
+
 ## Entry Template
 - Date: YYYY-MM-DD
 - Context: <what triggered the decision>

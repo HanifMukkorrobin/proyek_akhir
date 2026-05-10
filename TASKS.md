@@ -10,6 +10,10 @@
 | API-016 | Tune external geocoding merge heuristics | P1 | Unassigned | API-017 | Refine when Nominatim hint should override internal mapping. |
 | API-018 | Add connectivity monitor for Nominatim | P2 | Unassigned | API-017 | Optional: detect timeout/rate-limit and expose health telemetry. |
 | API-020 | Improve token normalization quality | P1 | Unassigned | API-012 | Optional: collapse repeated terms in token chunks after numeric removal. |
+| API-049 | Persist Nominatim cache across requests | P1 | Unassigned | API-017 | Cache per-request dibuang setelah response. Tambah cache persistent (Cache store / tabel) berkunci md5 query, TTL 30–90 hari untuk mempercepat bulk import. |
+| API-051 | Add data-driven kabupaten/kota alias dictionary | P2 | Unassigned | API-023 | Tambah tabel `wilayah_aliases (wilayah_id, alias)` dan merge alias ke `buildSearchKeys` supaya shortform umum (JKT/BDG/SBY/MLG) ter-resolve. |
+| API-052 | Add phonetic fallback matcher (Metaphone) | P2 | Unassigned | API-012 | Tambah pass Metaphone untuk token ≥6 karakter ketika fuzzy Levenshtein gagal lolos threshold adaptif. |
+| API-053 | Move stop-word and estate-word list to config | P2 | Unassigned | API-012 | Pindahkan `STOP_WORDS_PATTERN` ke `config/classifier.php` / env sehingga tuning tidak perlu edit class. |
 
 ## Doing
 | ID | Title | Priority | Owner/Agent | Dependencies | Notes |
@@ -55,7 +59,7 @@
 | API-033 | Consolidate import logic to MahasiswaRepository | P1 | Copilot | API-032 | Moved all import scan/confirm/template logic into `MahasiswaRepository` and removed dedicated import repository file. |
 | API-034 | Create auth tables for multilevel login | P0 | Copilot | None | Added migrations for `users` and `auth_tokens` tables with role support (`admin`,`dosen`,`mahasiswa`). |
 | API-035 | Implement login API with token | P0 | Copilot | API-034 | Added `POST /auth/login` that validates credentials and returns bearer token plus user role payload. |
-| API-036 | Seed default auth accounts | P1 | Copilot | API-034 | Added auth seeder for demo accounts `admin`, `dosen`, `mahasiswa` (password default `password123`). |
+| API-036 | Seed default auth accounts | P1 | Copilot | API-034 | Added auth seeder for demo accounts `admin`, `dosen`, `mahasiswa` (password default `P@ssw0rd`). |
 | API-037 | Enforce token middleware on non-public APIs | P0 | Copilot | API-035 | Added `auth.token` middleware to require login token for non-public routes (`/mahasiswa` and import routes). |
 | API-038 | Add dedicated token validation helper | P0 | Copilot | API-037 | Added separate helper for token extraction and validation, used by middleware for Authorization/token header checks. |
 | FE-001 | Bootstrap Nuxt 4 app in app folder | P0 | Copilot | None | Initialized Nuxt 4 minimal template in `app/` with npm scripts and base structure. |
@@ -87,6 +91,12 @@
 | FE-022 | Wire non-admin Cesium map to map APIs | P0 | Codex | FE-021, API-043 | `/dashbord/map` now loads zoom-driven wilayah points, region mahasiswa lists, and mahasiswa search markers from `/dashboard/map/*`. |
 | FE-023 | Optimize Cesium map rendering performance | P0 | Codex | FE-022 | Reduced marker/API limits per level, disabled heavy terrain/effects, switched Cesium to on-demand render, and reduced labels/arcs/search markers. |
 | API-044 | Optimize dashboard map query path and DB indexes | P0 | Codex | API-043 | Removed extra `has_child` query pass, pushed parent filter into aggregation, and added local DB indexes for active `mahasiswa.wilayah_id`. |
+| API-045 | Filter soft-deleted wilayah from classifier candidates | P0 | Codex | API-022 | Classifier candidates now skip `dihapus_pada` rows while retaining dictionary rows for hierarchy lookup. |
+| API-046 | Remove silent PENS default fallback in mahasiswa create/update/import | P0 | Codex | API-025, API-030 | Weak/empty classifications now keep the original address, clear wilayah/coordinates, and mark `needs_review` in scan/reference output instead of substituting PENS. |
+| API-047 | Restrict desa hint bucket to level 5 only | P0 | Codex | API-022 | `resolveHintBucketForLevel` now maps only level 5 to `desa`, preventing dusun/deeper rows from receiving desa hint bonuses. |
+| API-048 | Gate Nominatim fallback on confidence and hint coverage | P1 | Codex | API-017, API-023 | External fallback is now opt-in by default and only triggers when confidence `<0.55` and hint coverage `<0.5`. |
+| API-050 | Tighten classifier contains-match floor for short tokens | P1 | Codex | API-012 | Contains matches are skipped when exact token matches exist and require stricter length ratio for tokens up to 6 chars. |
+| API-054 | Improve internal-only import classification accuracy | P0 | Codex | API-045, API-046, API-050 | Added jammed administrative keyword parsing, level-locked admin hints, hint-aligned anchor selection, distinct-token hierarchy support, high-gap exact acceptance, and `MEDAYU UTARA` alias; latest 223-row draft improved 79 -> 105 importable. |
 | FE-024 | Reduce kecamatan render churn in Cesium map | P0 | Codex | FE-023, API-044 | Switched bulk wilayah markers to Cesium primitives, cached map payloads, and stopped bounds-based refetch when parent drilldown is already fixed. |
 | FE-025 | Place map markers relative to terrain height | P0 | Codex | FE-024 | Loaded Cesium world terrain asynchronously, sampled marker ground heights with cache, and positioned region/search points slightly above terrain. |
 | FE-026 | Scope map drilldown fetches to selected parent and harden flyToIndonesia | P0 | Codex | FE-024, FE-025 | Prevented global fetch for kabupaten/kecamatan/desa, resolved parent from current region selection, and made `flyToIndonesia` reset via cached province payload before camera animation. |

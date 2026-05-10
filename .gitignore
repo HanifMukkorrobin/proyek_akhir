@@ -4,6 +4,7 @@ agent-temp/
 agent-cache/
 .agent-state/
 .agent-work/
+.kiro
 
 # Dependencies
 /api/vendor/

@@ -10,13 +10,17 @@ class AddressWilayahClassifierRepository
 
     private const HIERARCHY_COMPLETENESS_WEIGHT = 0.03;
 
-    private const ADMIN_HINT_EXACT_BONUS = 0.2;
+    private const ADMIN_HINT_EXACT_BONUS = 0.25;
 
-    private const ADMIN_HINT_PARTIAL_BONUS = 0.12;
+    private const ADMIN_HINT_PARTIAL_BONUS = 0.15;
 
     private const ADMIN_HINT_FUZZY_BONUS = 0.08;
 
-    private const STOP_WORDS_PATTERN = '/\b(ALAMAT|RUMAH|JL|JLN|JALAN|NO|NOMOR|BLOK|BLK|RT|RW|GANG|GG|PERUM|PERUMAHAN|KAV|KAVLING|DSN|DUSUN|DS|DESA|KEL|KELURAHAN|KEC|KECAMATAN|KAB|KABUPATEN|KOTA|PROV|PROVINSI)\.?\b/u';
+    /** Penalty ketika nama kandidat cocok dengan hint tapi levelnya SALAH (desa = nama kecamatan). */
+    private const ADMIN_HINT_LEVEL_MISMATCH_PENALTY = -0.15;
+
+    /** Kata-kata umum yang bukan nama wilayah — dihapus sebelum tokenisasi. */
+    private const STOP_WORDS_PATTERN = '/\b(ALAMAT|RUMAH|JL|JLN|JALAN|NO|NOMOR|BLOK|BLK|RT|RW|GANG|GG|PERUM|PERUMAHAN|KAV|KAVLING|DSN|DUSUN|DS|DESA|KEL|KELURAHAN|KEC|KECAMATAN|KAB|KABUPATEN|KOTA|PROV|PROVINSI|LINGKUNGAN|KOMPLEK|CLUSTER|GRIYA|REGENCY|RESIDENCE|INDAH|PERMAI|ASRI|SEJAHTERA)\.?\b/u';
 
     private WilayahDictionaryRepository $wilayahDictionaryRepository;
 
@@ -88,23 +92,27 @@ class AddressWilayahClassifierRepository
         ];
 
         if ($useExternalGeocoding && $this->shouldUseExternal($internalResult)) {
-            $queryAddress = $this->buildManualGeocodingQuery($selectedResult);
+            // Bangun komponen wilayah dari hasil normalisasi internal classifier.
+            // Format: "Bojong Kulur, Gunung Putri, Kabupaten Bogor, Jawa Barat"
+            $wilayahParts = $this->buildStructuredWilayahParts($selectedResult);
 
-            $externalGeocodingMeta['query_source'] = 'manual_wilayah';
-            $externalGeocodingMeta['query_address'] = $queryAddress;
+            // Susun query string penuh untuk meta logging
+            $fullQuery = implode(', ', array_filter([
+                $wilayahParts['desa'],
+                $wilayahParts['kecamatan'],
+                $wilayahParts['kabupaten'],
+                $wilayahParts['provinsi'],
+            ]));
 
-            if ($queryAddress === '') {
-                return [
-                    'alamat_asli' => $address,
-                    'normalisasi' => $internalResult['normalisasi'],
-                    'mapping' => $selectedResult['mapping'],
-                    'geocoding' => $selectedResult['geocoding'],
-                    'needs_confirmation' => $selectedResult['needs_confirmation'],
-                    'external_geocoding' => $externalGeocodingMeta,
-                ];
-            }
+            $externalGeocodingMeta['query_source']  = 'normalized_wilayah';
+            $externalGeocodingMeta['query_address'] = $fullQuery;
 
-            $externalResult = $this->nominatimGeocodingRepository->geocode($queryAddress);
+            // geocodeWithFallback() mencoba dari paling spesifik ke paling umum:
+            //   1. "desa, kecamatan, Kabupaten X, Provinsi"
+            //   2. "kecamatan, Kabupaten X, Provinsi"
+            //   3. "Kabupaten X, Provinsi"
+            //   4. "Provinsi"
+            $externalResult = $this->nominatimGeocodingRepository->geocodeWithFallback($wilayahParts);
 
             if ($externalResult !== null) {
                 $externalGeocodingMeta = [
@@ -115,8 +123,8 @@ class AddressWilayahClassifierRepository
                     'longitude' => $externalResult['longitude'],
                     'importance' => $externalResult['importance'],
                     'hint_address' => null,
-                    'query_source' => 'manual_wilayah',
-                    'query_address' => $queryAddress,
+                    'query_source' => 'normalized_wilayah',
+                    'query_address' => $fullQuery,
                 ];
 
                 $hintAddress = $this->buildExternalHintAddress($externalResult['address'] ?? []);
@@ -162,7 +170,7 @@ class AddressWilayahClassifierRepository
     {
         $dictionary = $this->wilayahDictionaryRepository->getDictionary();
 
-        $uppercase = mb_strtoupper($address);
+        $uppercase = $this->normalizeAdministrativeKeywordBoundaries(mb_strtoupper($address));
         $specialCleaned = $this->removeSpecialCharacters($uppercase);
         $administrativeHints = $this->extractAdministrativeHints($specialCleaned);
         $withoutStopWords = $this->removeStopWords($specialCleaned);
@@ -181,9 +189,14 @@ class AddressWilayahClassifierRepository
         $coordinates = $this->resolveCoordinates($mappedWilayah);
         $topCandidatesForReview = $this->buildTopCandidatesForReview($candidates);
 
-        $needsConfirmation = $anchor === null
-            || ($hierarchyValidation['status'] ?? 'consistent') === 'inconsistent'
-            || ($confidence['score'] ?? 0) < self::CONFIDENCE_REVIEW_THRESHOLD;
+        $needsConfirmation = $this->shouldNeedConfirmation(
+            $anchor,
+            $candidates,
+            $hierarchyValidation,
+            $mappedWilayah,
+            $confidence,
+            $administrativeHints
+        );
         $status = $anchor === null ? 'unmatched' : ($needsConfirmation ? 'partial' : 'matched');
 
         return [
@@ -214,6 +227,25 @@ class AddressWilayahClassifierRepository
             ],
             'needs_confirmation' => $needsConfirmation,
         ];
+    }
+
+    private function normalizeAdministrativeKeywordBoundaries(string $address): string
+    {
+        $normalized = preg_replace(
+            '/(?<=[A-Z0-9])(?=(?:PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN|DUSUN|DESA)\b)/u',
+            ' ',
+            $address
+        ) ?? $address;
+
+        $normalized = preg_replace(
+            '/(?<=[A-Z0-9])(?=(?:PROV|KAB|KEC|KEL|DSN|DS)\.?(?=[\s\.\/:;,]))/u',
+            ' ',
+            $normalized
+        ) ?? $normalized;
+
+        $normalized = preg_replace('/\bKEL(?:URAHAN)?\.?\s*\/\s*DESA\b/u', 'DESA', $normalized) ?? $normalized;
+
+        return preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
     }
 
     private function removeSpecialCharacters(string $address): string
@@ -314,7 +346,7 @@ class AddressWilayahClassifierRepository
                 continue;
             }
 
-            $tokenCandidates = $this->collectCandidatesFromToken($token, $tokenKey, $dictionary);
+            $tokenCandidates = $this->collectCandidatesFromToken($token, $tokenKey, $dictionary, $administrativeHints);
 
             foreach ($tokenCandidates as $candidate) {
                 $id = $candidate['wilayah_id'];
@@ -327,14 +359,17 @@ class AddressWilayahClassifierRepository
 
         $candidates = array_values($candidateMap);
         $scoreById = [];
+        $tokenKeyById = [];
 
         foreach ($candidates as $candidate) {
             $scoreById[$candidate['wilayah_id']] = $candidate['score'];
+            $tokenKeyById[$candidate['wilayah_id']] = $this->canonicalize((string) ($candidate['token'] ?? ''));
         }
 
         foreach ($candidates as $index => $candidate) {
-            $contextScore = $this->calculateHierarchyContextScore($candidate['wilayah_id'], $scoreById);
-            $hierarchyCompleteness = $this->calculateHierarchyCompleteness($candidate['wilayah_id'], $scoreById);
+            $candidateTokenKey = $this->canonicalize((string) ($candidate['token'] ?? ''));
+            $contextScore = $this->calculateHierarchyContextScore($candidate['wilayah_id'], $scoreById, $tokenKeyById, $candidateTokenKey);
+            $hierarchyCompleteness = $this->calculateHierarchyCompleteness($candidate['wilayah_id'], $scoreById, $tokenKeyById, $candidateTokenKey);
             $hintScore = $this->calculateAdministrativeHintScore($candidate, $administrativeHints);
 
             $candidates[$index]['context_score'] = round($contextScore, 4);
@@ -368,10 +403,11 @@ class AddressWilayahClassifierRepository
         return $candidates;
     }
 
-    private function collectCandidatesFromToken(string $token, string $tokenKey, array $dictionary): array
+    private function collectCandidatesFromToken(string $token, string $tokenKey, array $dictionary, array $administrativeHints): array
     {
         $candidates = [];
         $candidateMap = [];
+        $allowedHintBuckets = $this->resolveAllowedHintBucketsForToken($tokenKey, $administrativeHints);
 
         $rowsById = $dictionary['rows_by_id'];
         $byKey = $dictionary['by_key'];
@@ -386,6 +422,15 @@ class AddressWilayahClassifierRepository
                 }
 
                 $row = $rowsById[$wilayahId];
+
+                if (($row['is_deleted'] ?? false) === true) {
+                    continue;
+                }
+
+                if (!$this->isCandidateAllowedByHintBucket($row, $allowedHintBuckets)) {
+                    continue;
+                }
+
                 $candidateMap[$wilayahId] = [
                     'wilayah_id' => $wilayahId,
                     'nama' => $row['nama'],
@@ -398,58 +443,76 @@ class AddressWilayahClassifierRepository
             }
         }
 
+        $hasExactMatch = !empty($candidateMap);
         $prefix = substr($tokenKey, 0, 2);
         $candidateKeys = $keysByPrefix[$prefix] ?? [];
 
-        foreach ($candidateKeys as $candidateKey) {
-            if (!isset($byKey[$candidateKey])) {
-                continue;
-            }
-
-            if ($candidateKey === $tokenKey) {
-                continue;
-            }
-
-            if (strlen($candidateKey) < 4) {
-                continue;
-            }
-
-            $containsRelation = str_contains($tokenKey, $candidateKey) || str_contains($candidateKey, $tokenKey);
-
-            if (!$containsRelation) {
-                continue;
-            }
-
-            $shortTokenOverlap = min(strlen($candidateKey), strlen($tokenKey)) <= 5
-                && abs(strlen($candidateKey) - strlen($tokenKey)) <= 1;
-
-            if ($shortTokenOverlap) {
-                continue;
-            }
-
-            $lenRatio = min(strlen($candidateKey), strlen($tokenKey)) / max(strlen($candidateKey), strlen($tokenKey));
-            $score = min(0.92, 0.72 + (0.2 * $lenRatio));
-
-            foreach ($byKey[$candidateKey] as $wilayahId) {
-                if (!isset($rowsById[$wilayahId])) {
+        if (!$hasExactMatch) {
+            foreach ($candidateKeys as $candidateKey) {
+                if (!isset($byKey[$candidateKey])) {
                     continue;
                 }
 
-                $row = $rowsById[$wilayahId];
-
-                if (isset($candidateMap[$wilayahId]) && $candidateMap[$wilayahId]['score'] >= $score) {
+                if ($candidateKey === $tokenKey) {
                     continue;
                 }
 
-                $candidateMap[$wilayahId] = [
-                    'wilayah_id' => $wilayahId,
-                    'nama' => $row['nama'],
-                    'level' => $row['level'],
-                    'score' => round($score, 4),
-                    'match_type' => 'contains',
-                    'token' => $token,
-                    'matched_key_length' => strlen($candidateKey),
-                ];
+                if (strlen($candidateKey) < 4) {
+                    continue;
+                }
+
+                $containsRelation = str_contains($tokenKey, $candidateKey) || str_contains($candidateKey, $tokenKey);
+
+                if (!$containsRelation) {
+                    continue;
+                }
+
+                $shortTokenOverlap = min(strlen($candidateKey), strlen($tokenKey)) <= 5
+                    && abs(strlen($candidateKey) - strlen($tokenKey)) <= 1;
+
+                if ($shortTokenOverlap) {
+                    continue;
+                }
+
+                $lenRatio = min(strlen($candidateKey), strlen($tokenKey)) / max(strlen($candidateKey), strlen($tokenKey));
+                $minLength = min(strlen($candidateKey), strlen($tokenKey));
+                $minLenRatio = $minLength <= 6 ? 0.74 : 0.7;
+
+                if ($lenRatio < $minLenRatio) {
+                    continue;
+                }
+
+                $score = min(0.88, 0.68 + (0.2 * $lenRatio));
+
+                foreach ($byKey[$candidateKey] as $wilayahId) {
+                    if (!isset($rowsById[$wilayahId])) {
+                        continue;
+                    }
+
+                    $row = $rowsById[$wilayahId];
+
+                    if (($row['is_deleted'] ?? false) === true) {
+                        continue;
+                    }
+
+                    if (!$this->isCandidateAllowedByHintBucket($row, $allowedHintBuckets)) {
+                        continue;
+                    }
+
+                    if (isset($candidateMap[$wilayahId]) && $candidateMap[$wilayahId]['score'] >= $score) {
+                        continue;
+                    }
+
+                    $candidateMap[$wilayahId] = [
+                        'wilayah_id' => $wilayahId,
+                        'nama' => $row['nama'],
+                        'level' => $row['level'],
+                        'score' => round($score, 4),
+                        'match_type' => 'contains',
+                        'token' => $token,
+                        'matched_key_length' => strlen($candidateKey),
+                    ];
+                }
             }
         }
 
@@ -479,6 +542,14 @@ class AddressWilayahClassifierRepository
 
                     $row = $rowsById[$wilayahId];
 
+                    if (($row['is_deleted'] ?? false) === true) {
+                        continue;
+                    }
+
+                    if (!$this->isCandidateAllowedByHintBucket($row, $allowedHintBuckets)) {
+                        continue;
+                    }
+
                     if (isset($candidateMap[$wilayahId]) && $candidateMap[$wilayahId]['score'] >= $score) {
                         continue;
                     }
@@ -503,6 +574,36 @@ class AddressWilayahClassifierRepository
         return $candidates;
     }
 
+    private function resolveAllowedHintBucketsForToken(string $tokenKey, array $administrativeHints): ?array
+    {
+        $allowedBuckets = [];
+
+        foreach (['provinsi', 'kabupaten_kota', 'kecamatan', 'desa'] as $bucket) {
+            foreach (($administrativeHints[$bucket] ?? []) as $hint) {
+                $hintKey = $this->canonicalize((string) $hint);
+
+                if ($hintKey === '' || $hintKey !== $tokenKey) {
+                    continue;
+                }
+
+                $allowedBuckets[$bucket] = true;
+            }
+        }
+
+        return empty($allowedBuckets) ? null : $allowedBuckets;
+    }
+
+    private function isCandidateAllowedByHintBucket(array $row, ?array $allowedHintBuckets): bool
+    {
+        if ($allowedHintBuckets === null) {
+            return true;
+        }
+
+        $bucket = $this->resolveHintBucketForLevel((int) ($row['level'] ?? 0));
+
+        return $bucket !== null && isset($allowedHintBuckets[$bucket]);
+    }
+
     private function pickAnchor(array $candidates): ?array
     {
         if (empty($candidates)) {
@@ -511,12 +612,22 @@ class AddressWilayahClassifierRepository
 
         $topCandidate = $candidates[0];
         $topRankScore = $topCandidate['rank_score'] ?? $topCandidate['score'];
+        $preferredHintCandidate = $this->findPreferredHintCandidate($candidates);
 
-        $desaCandidates = array_values(array_filter($candidates, function (array $candidate) use ($topRankScore) {
+        $desaCandidates = array_values(array_filter($candidates, function (array $candidate) use ($topRankScore, $preferredHintCandidate) {
             $rankScore = $candidate['rank_score'] ?? $candidate['score'];
+
+            if ($preferredHintCandidate !== null
+                && !$this->isSameOrDescendantWilayah(
+                    (string) ($candidate['wilayah_id'] ?? ''),
+                    (string) ($preferredHintCandidate['wilayah_id'] ?? '')
+                )) {
+                return false;
+            }
 
             return $candidate['level'] >= 5
                 && $candidate['score'] >= 0.83
+                && ($candidate['hint_score'] ?? 0) >= 0
                 && $rankScore >= ($topRankScore * 0.82);
         }));
 
@@ -537,6 +648,8 @@ class AddressWilayahClassifierRepository
             });
 
             $anchor = $desaCandidates[0];
+        } elseif ($preferredHintCandidate !== null) {
+            $anchor = $preferredHintCandidate;
         } else {
             $anchor = $topCandidate;
         }
@@ -550,6 +663,68 @@ class AddressWilayahClassifierRepository
         );
 
         return $anchor;
+    }
+
+    private function findPreferredHintCandidate(array $candidates): ?array
+    {
+        $hintCandidates = array_values(array_filter($candidates, static function (array $candidate): bool {
+            return ($candidate['hint_score'] ?? 0) > 0
+                && ($candidate['wilayah_id'] ?? '') !== '';
+        }));
+
+        if (empty($hintCandidates)) {
+            return null;
+        }
+
+        usort($hintCandidates, function (array $a, array $b) use ($candidates): int {
+            if (($a['hint_score'] ?? 0) !== ($b['hint_score'] ?? 0)) {
+                return ($b['hint_score'] ?? 0) <=> ($a['hint_score'] ?? 0);
+            }
+
+            if (($a['level'] ?? 0) !== ($b['level'] ?? 0)) {
+                return ($b['level'] ?? 0) <=> ($a['level'] ?? 0);
+            }
+
+            $descendantSupportA = $this->countDescendantCandidateSupport((string) ($a['wilayah_id'] ?? ''), $candidates);
+            $descendantSupportB = $this->countDescendantCandidateSupport((string) ($b['wilayah_id'] ?? ''), $candidates);
+
+            if ($descendantSupportA !== $descendantSupportB) {
+                return $descendantSupportB <=> $descendantSupportA;
+            }
+
+            $rankA = $a['rank_score'] ?? $a['score'] ?? 0;
+            $rankB = $b['rank_score'] ?? $b['score'] ?? 0;
+
+            return $rankB <=> $rankA;
+        });
+
+        return $hintCandidates[0];
+    }
+
+    private function countDescendantCandidateSupport(string $wilayahId, array $candidates): int
+    {
+        if ($wilayahId === '') {
+            return 0;
+        }
+
+        $support = 0;
+
+        foreach ($candidates as $candidate) {
+            $candidateId = (string) ($candidate['wilayah_id'] ?? '');
+
+            if ($candidateId !== $wilayahId && str_starts_with($candidateId, $wilayahId)) {
+                $support++;
+            }
+        }
+
+        return $support;
+    }
+
+    private function isSameOrDescendantWilayah(string $wilayahId, string $ancestorWilayahId): bool
+    {
+        return $wilayahId !== ''
+            && $ancestorWilayahId !== ''
+            && str_starts_with($wilayahId, $ancestorWilayahId);
     }
 
     private function buildMappedWilayah(?array $anchor, array $rowsById): array
@@ -692,10 +867,14 @@ class AddressWilayahClassifierRepository
         $length = strlen($tokenKey);
         $boundedLength = min($length, 15);
 
-        return round(0.7 + (($boundedLength / 15) * 0.3), 4);
+        // Penalty untuk token pendek (≤ 5 karakter) — terlalu ambigu
+        // "PAKEL" (5), "TUGU" (4), "WADAS" (5) → base lebih rendah
+        $base = $length <= 5 ? 0.6 : 0.7;
+
+        return round($base + (($boundedLength / 15) * 0.3), 4);
     }
 
-    private function calculateHierarchyContextScore(string $wilayahId, array $scoreById): float
+    private function calculateHierarchyContextScore(string $wilayahId, array $scoreById, array $tokenKeyById, string $candidateTokenKey): float
     {
         $contextScore = 0.0;
         $currentId = $wilayahId;
@@ -707,13 +886,17 @@ class AddressWilayahClassifierRepository
                 continue;
             }
 
-            $contextScore += $scoreById[$currentId] * 0.35;
+            if (($tokenKeyById[$currentId] ?? '') === $candidateTokenKey) {
+                continue;
+            }
+
+            $contextScore += $scoreById[$currentId] * 0.5;
         }
 
         return $contextScore;
     }
 
-    private function calculateHierarchyCompleteness(string $wilayahId, array $scoreById): int
+    private function calculateHierarchyCompleteness(string $wilayahId, array $scoreById, array $tokenKeyById, string $candidateTokenKey): int
     {
         $completeness = 0;
         $currentId = $wilayahId;
@@ -721,7 +904,7 @@ class AddressWilayahClassifierRepository
         while (strlen($currentId) > 3) {
             $currentId = substr($currentId, 0, strlen($currentId) - 3);
 
-            if (isset($scoreById[$currentId])) {
+            if (isset($scoreById[$currentId]) && ($tokenKeyById[$currentId] ?? '') !== $candidateTokenKey) {
                 $completeness++;
             }
         }
@@ -731,12 +914,8 @@ class AddressWilayahClassifierRepository
 
     private function calculateAdministrativeHintScore(array $candidate, array $administrativeHints): float
     {
-        $level = (int) ($candidate['level'] ?? 0);
-        $bucket = $this->resolveHintBucketForLevel($level);
-
-        if ($bucket === null || empty($administrativeHints[$bucket])) {
-            return 0.0;
-        }
+        $candidateLevel = (int) ($candidate['level'] ?? 0);
+        $candidateBucket = $this->resolveHintBucketForLevel($candidateLevel);
 
         $candidateName = $this->stripAdministrativePrefix((string) ($candidate['nama'] ?? ''));
         $candidateKey = $this->canonicalize($candidateName);
@@ -746,28 +925,61 @@ class AddressWilayahClassifierRepository
         }
 
         $bestBonus = 0.0;
+        $hasSameBucketExactHint = false;
 
-        foreach ($administrativeHints[$bucket] as $hint) {
-            $hintKey = $this->canonicalize((string) $hint);
+        // 1) Cek apakah nama kandidat cocok dengan hint di LEVEL YANG SAMA (positive signal)
+        if ($candidateBucket !== null && !empty($administrativeHints[$candidateBucket])) {
+            foreach ($administrativeHints[$candidateBucket] as $hint) {
+                $hintKey = $this->canonicalize((string) $hint);
 
-            if ($hintKey === '') {
-                continue;
+                if ($hintKey === '') {
+                    continue;
+                }
+
+                if ($hintKey === $candidateKey) {
+                    $hasSameBucketExactHint = true;
+                    $bestBonus = max($bestBonus, self::ADMIN_HINT_EXACT_BONUS);
+                    continue;
+                }
+
+                if (str_contains($candidateKey, $hintKey) || str_contains($hintKey, $candidateKey)) {
+                    $bestBonus = max($bestBonus, self::ADMIN_HINT_PARTIAL_BONUS);
+                    continue;
+                }
+
+                $similarity = $this->similarity($candidateKey, $hintKey);
+
+                if ($similarity >= 0.9) {
+                    $bestBonus = max($bestBonus, self::ADMIN_HINT_FUZZY_BONUS);
+                }
             }
+        }
 
-            if ($hintKey === $candidateKey) {
-                $bestBonus = max($bestBonus, self::ADMIN_HINT_EXACT_BONUS);
-                continue;
-            }
+        // 2) Cek apakah nama kandidat cocok dengan hint di LEVEL LAIN (negative signal)
+        //    Contoh: desa "Kedungwaru" match hint kecamatan "Kedungwaru" → penalty
+        //    Ini menandakan bahwa token sebenarnya merujuk ke kecamatan, bukan desa.
+        if (!$hasSameBucketExactHint) {
+            $otherBuckets = array_diff(
+                ['provinsi', 'kabupaten_kota', 'kecamatan', 'desa'],
+                $candidateBucket !== null ? [$candidateBucket] : []
+            );
 
-            if (str_contains($candidateKey, $hintKey) || str_contains($hintKey, $candidateKey)) {
-                $bestBonus = max($bestBonus, self::ADMIN_HINT_PARTIAL_BONUS);
-                continue;
-            }
+            foreach ($otherBuckets as $otherBucket) {
+                if (empty($administrativeHints[$otherBucket])) {
+                    continue;
+                }
 
-            $similarity = $this->similarity($candidateKey, $hintKey);
+                foreach ($administrativeHints[$otherBucket] as $hint) {
+                    $hintKey = $this->canonicalize((string) $hint);
 
-            if ($similarity >= 0.9) {
-                $bestBonus = max($bestBonus, self::ADMIN_HINT_FUZZY_BONUS);
+                    if ($hintKey === '' || $hintKey !== $candidateKey) {
+                        continue;
+                    }
+
+                    // Nama persis sama tapi level berbeda → strong negative signal
+                    $bestBonus = min($bestBonus, self::ADMIN_HINT_LEVEL_MISMATCH_PENALTY);
+                    break 2;
+                }
             }
         }
 
@@ -776,7 +988,7 @@ class AddressWilayahClassifierRepository
 
     private function resolveHintBucketForLevel(int $level): ?string
     {
-        if ($level >= 5) {
+        if ($level === 5) {
             return 'desa';
         }
 
@@ -954,8 +1166,14 @@ class AddressWilayahClassifierRepository
             return $hints;
         }
 
-        $keywords = 'PROVINSI|PROV|KABUPATEN|KAB|KOTA|KECAMATAN|KEC|DESA|DS|KELURAHAN|KEL|DUSUN|DSN';
-        $pattern = '/\b(' . $keywords . ')\.?\s*([^,]+?)(?=\s+\b(?:' . $keywords . ')\b|,|$)/u';
+        $keywordBoundary = '(?=[\s\.,:;\/-]|$)';
+        $keywords = 'PROVINSI|PROV' . $keywordBoundary
+            . '|KABUPATEN|KAB' . $keywordBoundary
+            . '|KOTA|KECAMATAN|KEC' . $keywordBoundary
+            . '|DESA|DS' . $keywordBoundary
+            . '|KELURAHAN|KEL' . $keywordBoundary
+            . '|DUSUN|DSN' . $keywordBoundary;
+        $pattern = '/\b(' . $keywords . ')\.?\s*[\.,:;\/-]?\s*([^,]+?)(?=\s+\b(?:' . $keywords . ')|,|$)/u';
 
         if (preg_match_all($pattern, $address, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
@@ -1013,8 +1231,8 @@ class AddressWilayahClassifierRepository
             'DS' => 'desa',
             'KELURAHAN' => 'desa',
             'KEL' => 'desa',
-            'DUSUN' => 'desa',
-            'DSN' => 'desa',
+            // DUSUN/DSN sengaja TIDAK dimasukkan ke bucket desa
+            // karena dusun bukan level administratif yang sama dengan desa.
         ];
 
         return $map[$normalized] ?? null;
@@ -1025,6 +1243,57 @@ class AddressWilayahClassifierRepository
         $normalized = $this->normalizeLocationPart($this->stripAdministrativePrefix($value));
         $normalized = preg_replace('/\d+/u', ' ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
+        $normalized = $this->removeTrailingProvinceName($normalized);
+
+        return trim($normalized);
+    }
+
+    private function removeTrailingProvinceName(string $value): string
+    {
+        $provinceNames = [
+            'ACEH',
+            'SUMATERA UTARA',
+            'SUMATERA BARAT',
+            'RIAU',
+            'JAMBI',
+            'SUMATERA SELATAN',
+            'BENGKULU',
+            'LAMPUNG',
+            'KEPULAUAN BANGKA BELITUNG',
+            'KEPULAUAN RIAU',
+            'DKI JAKARTA',
+            'JAWA BARAT',
+            'JAWA TENGAH',
+            'DAERAH ISTIMEWA YOGYAKARTA',
+            'DI YOGYAKARTA',
+            'JAWA TIMUR',
+            'BANTEN',
+            'BALI',
+            'NUSA TENGGARA BARAT',
+            'NUSA TENGGARA TIMUR',
+            'KALIMANTAN BARAT',
+            'KALIMANTAN TENGAH',
+            'KALIMANTAN SELATAN',
+            'KALIMANTAN TIMUR',
+            'KALIMANTAN UTARA',
+            'SULAWESI UTARA',
+            'SULAWESI TENGAH',
+            'SULAWESI SELATAN',
+            'SULAWESI TENGGARA',
+            'GORONTALO',
+            'SULAWESI BARAT',
+            'MALUKU',
+            'MALUKU UTARA',
+            'PAPUA',
+            'PAPUA BARAT',
+        ];
+
+        $normalized = trim($value);
+
+        foreach ($provinceNames as $provinceName) {
+            $pattern = '/\s+' . preg_quote($provinceName, '/') . '$/u';
+            $normalized = preg_replace($pattern, '', $normalized) ?? $normalized;
+        }
 
         return trim($normalized);
     }
@@ -1103,6 +1372,146 @@ class AddressWilayahClassifierRepository
         }
 
         return 0.55;
+    }
+
+    private function shouldNeedConfirmation(
+        ?array $anchor,
+        array $candidates,
+        array $hierarchyValidation,
+        array $mappedWilayah,
+        array $confidence,
+        array $administrativeHints
+    ): bool {
+        if ($anchor === null) {
+            return true;
+        }
+
+        if (($hierarchyValidation['status'] ?? 'consistent') === 'inconsistent') {
+            return true;
+        }
+
+        $confidenceScore = (float) ($confidence['score'] ?? 0.0);
+
+        if ($confidenceScore >= self::CONFIDENCE_REVIEW_THRESHOLD) {
+            return false;
+        }
+
+        $components = $confidence['components'] ?? [];
+        $anchorScore = (float) ($components['anchor_score'] ?? 0.0);
+        $gapScore = (float) ($components['gap_score'] ?? 0.0);
+        $hintCoverageScore = (float) ($components['hint_coverage_score'] ?? 0.0);
+        $supportCount = $this->countMappedCandidateSupport($mappedWilayah, $candidates);
+        $distinctTokenSupport = $this->countMappedDistinctCandidateTokens($mappedWilayah, $candidates);
+
+        if ($confidenceScore >= 0.70 && $anchorScore >= 0.82 && $supportCount >= 2) {
+            return false;
+        }
+
+        if ($confidenceScore >= 0.755 && $anchorScore >= 0.90 && $gapScore >= 0.35) {
+            return false;
+        }
+
+        if ($confidenceScore >= 0.65
+            && $anchorScore >= 0.82
+            && $supportCount >= 2
+            && $distinctTokenSupport >= 2) {
+            return false;
+        }
+
+        if ($confidenceScore >= 0.68
+            && $anchorScore >= 0.84
+            && $supportCount >= 1
+            && $hintCoverageScore >= 0.66
+            && $this->countAdministrativeHints($administrativeHints) >= 2) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function countMappedCandidateSupport(array $mappedWilayah, array $candidates): int
+    {
+        $candidateIds = [];
+
+        foreach ($candidates as $candidate) {
+            $wilayahId = (string) ($candidate['wilayah_id'] ?? '');
+
+            if ($wilayahId !== '') {
+                $candidateIds[$wilayahId] = true;
+            }
+        }
+
+        $support = 0;
+
+        foreach (['kabupaten_kota', 'kecamatan', 'desa'] as $levelKey) {
+            $node = $mappedWilayah[$levelKey] ?? null;
+
+            if (!is_array($node)) {
+                continue;
+            }
+
+            $wilayahId = (string) ($node['wilayah_id'] ?? '');
+
+            if ($wilayahId !== '' && isset($candidateIds[$wilayahId])) {
+                $support++;
+            }
+        }
+
+        return $support;
+    }
+
+    private function countMappedDistinctCandidateTokens(array $mappedWilayah, array $candidates): int
+    {
+        $mappedIds = [];
+
+        foreach (['kabupaten_kota', 'kecamatan', 'desa'] as $levelKey) {
+            $node = $mappedWilayah[$levelKey] ?? null;
+
+            if (!is_array($node)) {
+                continue;
+            }
+
+            $wilayahId = (string) ($node['wilayah_id'] ?? '');
+
+            if ($wilayahId !== '') {
+                $mappedIds[$wilayahId] = true;
+            }
+        }
+
+        if (empty($mappedIds)) {
+            return 0;
+        }
+
+        $tokens = [];
+
+        foreach ($candidates as $candidate) {
+            $wilayahId = (string) ($candidate['wilayah_id'] ?? '');
+
+            if ($wilayahId === '' || !isset($mappedIds[$wilayahId])) {
+                continue;
+            }
+
+            $token = $this->canonicalize((string) ($candidate['token'] ?? ''));
+
+            if ($token !== '') {
+                $tokens[$token] = true;
+            }
+        }
+
+        return count($tokens);
+    }
+
+    private function countAdministrativeHints(array $administrativeHints): int
+    {
+        $count = 0;
+
+        foreach ($administrativeHints as $values) {
+            if (is_array($values)) {
+                $count += count($values);
+            }
+        }
+
+        return $count;
     }
 
     private function calculateHintCoverageScore(array $mappedWilayah, array $administrativeHints): float
@@ -1191,10 +1600,10 @@ class AddressWilayahClassifierRepository
             }
         }
 
-        $resolvedEnv = filter_var((string) env('NOMINATIM_ENABLED', 'true'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $resolvedEnv = filter_var((string) env('NOMINATIM_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
         if ($resolvedEnv === null) {
-            return true;
+            return false;
         }
 
         return $resolvedEnv;
@@ -1202,14 +1611,10 @@ class AddressWilayahClassifierRepository
 
     private function shouldUseExternal(array $internalResult): bool
     {
-        if (($internalResult['needs_confirmation'] ?? false) === true) {
-            return true;
-        }
+        $confidenceScore = (float) ($internalResult['mapping']['confidence']['score'] ?? 0.0);
+        $hintCoverageScore = (float) ($internalResult['mapping']['confidence']['components']['hint_coverage_score'] ?? 0.0);
 
-        $latitude = $internalResult['geocoding']['latitude'] ?? null;
-        $longitude = $internalResult['geocoding']['longitude'] ?? null;
-
-        return $latitude === null || $longitude === null;
+        return $confidenceScore < 0.55 && $hintCoverageScore < 0.5;
     }
 
     private function shouldPreferHintResult(array $currentResult, array $hintResult): bool
@@ -1381,5 +1786,86 @@ class AddressWilayahClassifierRepository
         }
 
         return trim($text);
+    }
+
+    /**
+     * Ekstrak dan format komponen wilayah dari hasil internal pipeline.
+     *
+     * Format output sesuai dengan format Nominatim yang valid:
+     *   "Bojong Kulur, Gunung Putri, Kabupaten Bogor, Jawa Barat"
+     *
+     * Aturan per level:
+     *   - desa/kelurahan : strip prefix (Desa/Kel/Ds), Title Case
+     *   - kecamatan      : strip prefix (Kec/Kecamatan), Title Case
+     *   - kabupaten_kota : PERTAHANKAN prefix "Kabupaten"/"Kota", Title Case
+     *   - provinsi       : strip prefix "Provinsi"/"Prov", Title Case
+     *
+     * @return array ['desa', 'kecamatan', 'kabupaten', 'provinsi']
+     */
+    private function buildStructuredWilayahParts(array $result): array
+    {
+        $wilayah = $result['mapping']['wilayah'] ?? [];
+
+        // Desa/Kelurahan: strip prefix administratif, Title Case
+        $desa = '';
+        if (is_array($wilayah['desa'] ?? null)) {
+            $raw  = $this->stripAdministrativePrefix((string) ($wilayah['desa']['nama'] ?? ''));
+            $desa = $this->toTitleCase($raw);
+        }
+
+        // Kecamatan: strip prefix, Title Case
+        $kec = '';
+        if (is_array($wilayah['kecamatan'] ?? null)) {
+            $raw = $this->stripAdministrativePrefix((string) ($wilayah['kecamatan']['nama'] ?? ''));
+            $kec = $this->toTitleCase($raw);
+        }
+
+        // Kabupaten/Kota: PERTAHANKAN prefix "Kabupaten"/"Kota" — wajib untuk Nominatim
+        // Normalisasi: "KAB. BREBES" → "Kabupaten Brebes", "KABUPATEN BREBES" → "Kabupaten Brebes"
+        //              "KOTA SURABAYA" → "Kota Surabaya"
+        $kab = '';
+        if (is_array($wilayah['kabupaten_kota'] ?? null)) {
+            $rawKab = mb_strtoupper(trim((string) ($wilayah['kabupaten_kota']['nama'] ?? '')));
+
+            // Normalisasi singkatan KAB. → KABUPATEN agar Nominatim bisa parse
+            $rawKab = preg_replace('/^KAB\.?\s+/u', 'KABUPATEN ', $rawKab) ?? $rawKab;
+
+            $kab = $this->toTitleCase($rawKab);
+        }
+
+        // Provinsi: strip prefix "Provinsi"/"Prov" (Nominatim sudah tahu ini provinsi)
+        // Contoh: "PROVINSI JAWA BARAT" → "Jawa Barat"
+        $prov = '';
+        if (is_array($wilayah['provinsi'] ?? null)) {
+            $raw  = preg_replace('/^(?:PROVINSI|PROV)\.?\s+/ui', '', mb_strtoupper((string) ($wilayah['provinsi']['nama'] ?? ''))) ?? '';
+            $prov = $this->toTitleCase(trim($raw));
+        }
+
+        // Fallback: jika semua level kosong, gunakan nama anchor
+        if ($desa === '' && $kec === '' && $kab === '' && $prov === '') {
+            $anchorName = $this->stripAdministrativePrefix(
+                (string) ($result['mapping']['anchor']['nama'] ?? '')
+            );
+
+            if ($anchorName !== '') {
+                $kab = $this->toTitleCase($anchorName);
+            }
+        }
+
+        return [
+            'desa'      => $desa,
+            'kecamatan' => $kec,
+            'kabupaten' => $kab,
+            'provinsi'  => $prov,
+        ];
+    }
+
+    /**
+     * Konversi string ke Title Case menggunakan multibyte UTF-8.
+     * Contoh: "JAWA BARAT" → "Jawa Barat", "gunung putri" → "Gunung Putri"
+     */
+    private function toTitleCase(string $value): string
+    {
+        return mb_convert_case(mb_strtolower(trim($value)), MB_CASE_TITLE, 'UTF-8');
     }
 }

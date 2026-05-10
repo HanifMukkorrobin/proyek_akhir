@@ -30,14 +30,12 @@
 - Observed: mahasiswa import now supports two-step flow (scan/classify then confirm insert) with draft import ID.
 - Observed: template Excel download endpoint for mahasiswa import is available.
 - Observed: import workflow logic has been consolidated into `MahasiswaRepository` so mahasiswa domain operations are handled in a single repository.
+- Observed: mahasiswa import scan now defaults to internal-only geocoding and Nominatim is opt-in (`NOMINATIM_ENABLED=false` by default or request `use_external_geocoding=true`).
+- Observed: weak/empty mahasiswa address classifications now keep the original address, clear wilayah/coordinates, and return `needs_review` instead of silently replacing alamat with the PENS default.
+- Observed: internal classifier now skips soft-deleted wilayah candidates, limits `desa` hint scoring to level 5, and tightens contains matching for short/exact tokens.
+- Observed: internal-only classifier retest on latest 223-row draft improved importable rows from 79 to 105; 90 rows remain blocked by empty addresses and 28 non-empty rows remain ambiguous.
 - Observed: authentication module is now available with multilevel roles (`admin`, `dosen`, `mahasiswa`) and token-based login endpoint.
-- Observed: auth tables (`users`, `auth_tokens`) have been added via migrations and seeded with default demo accounts.
-- Observed: non-public APIs now require login token header through `auth.token` middleware.
-- Observed: token extraction and token validity checks are handled by dedicated auth helper functions.
-- Observed: Nuxt 4 frontend project has been initialized in `app/` using minimal template.
-- Observed: frontend dependencies now include Tailwind CSS module, Pinia, and Axios with initial Nuxt configuration.
-- Observed: DaisyUI framework is now integrated on top of Tailwind for consistent component styling.
-- Observed: Nuxt production build now succeeds after disabling `cssnano` in Nuxt PostCSS config due local `csso/css-tree` compatibility issue.
+- Observed: auth demo accounts now default to password `P@ssw0rd`.
 - Observed: frontend API base URL now uses dotenv-backed `.env` variable `NUXT_PUBLIC_API_BASE`.
 - Observed: initial landing page is now implemented with responsive layout and persistent light/dark mode toggle.
 - Observed: landing header has been simplified by removing `NuklirVisit3D` text and switching theme control to icon-only button.
@@ -113,6 +111,7 @@
 - Updated tokenization so all numeric tokens and numeric n-grams are removed before matching.
 - Optimized classifier with administrative hint extraction/scoring and hierarchy consistency validation inspired by external reference matcher flow.
 - Implemented accuracy quick wins: alias key expansion in dictionary, adaptive fuzzy matching threshold, and confidence-based ambiguity handling with top candidate suggestions.
+- Tightened internal-only classifier behavior by excluding soft-deleted candidate anchors, restricting desa hint scoring to level 5, and skipping noisy contains matches when exact token matches exist.
 - Added dedicated documentation for geocoding pipeline flow (internal mapping + external Nominatim fallback) in docs.
 - Added global reusable pagination helper and wired it into `GET /mahasiswa` listing endpoint.
 - Added mahasiswa CRUD endpoints (`GET/POST/PUT/PATCH/DELETE`) with automatic geocoding-derived wilayah and coordinate population on save/update.
@@ -124,6 +123,7 @@
 - Added import API tahap 2 (`/mahasiswa/import/confirm`) for final data insertion using scanned draft and selectable row list.
 - Added endpoint `/mahasiswa/import/template` for downloadable Excel template.
 - Refactored import implementation by merging previous `MahasiswaImportRepository` logic into `MahasiswaRepository` and updating controller dependency.
+- Made import scan internal-only by default and changed weak classifications to non-importable review rows instead of substituting the default PENS address.
 - Added login API endpoint `/auth/login` that returns bearer token and user role information.
 - Added schema migrations for `users` and `auth_tokens`, plus auth seeder for default role accounts.
 - Added middleware protection for non-public routes (`/mahasiswa` and import endpoints) using login token.
@@ -187,6 +187,7 @@
 - Final route simulation data contract is not defined yet.
 - Frontend production build currently skips `cssnano` minification as compatibility workaround, which may slightly increase CSS output size.
 - `npm install cesium` reported 5 dependency audit findings; no automatic fix was applied.
+- Risk: External geocoding remains unsuitable for large bulk imports unless persistent cache or a non-public/batch-capable provider is added; tracked under API-049.
 
 ## Recently Touched Areas
 - .gitignore
@@ -221,6 +222,8 @@
 - Unknown: required response schema for final route simulation.
 
 ## Next Recommended Steps
+- Address remaining classifier/geocoding backlog: persist Nominatim cache, add data-driven kabupaten/kota aliases, evaluate phonetic fallback, and move stop-word tuning to config.
+- Validate internal-only import scan against a real 200-row file and review rows marked `needs_review`.
 - Define route simulation inputs, constraints, and expected output.
 - Run browser performance check on `/dashbord/map` with live API data and tune marker limits per device if needed.
 - Validate terrain marker accuracy and loading impact on target internet conditions, since world terrain sampling adds async requests outside the local API.

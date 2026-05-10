@@ -22,6 +22,7 @@ class WilayahDictionaryRepository
         'KEPULAUAN BANGKA BELITUNG' => ['BABEL'],
         'KEPULAUAN RIAU' => ['KEPRI'],
         'MALUKU UTARA' => ['MALUT'],
+        'MEDOKAN AYU' => ['MEDAYU UTARA'],
         'NUSA TENGGARA BARAT' => ['NTB'],
         'NUSA TENGGARA TIMUR' => ['NTT'],
         'SULAWESI BARAT' => ['SULBAR'],
