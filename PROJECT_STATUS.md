@@ -66,6 +66,7 @@
 - Observed: admin Log Aktivitas view is now wired to protected `/activity-logs` API for summary, search/filter/pagination, detail modal, and current-page CSV export.
 - Observed: non-admin chart dashboard route `/dashboard/chart` is implemented with the GeoVisit reference layout and uses protected dashboard summary/chart/wilayah-tree APIs.
 - Observed: login redirect now sends admin users to `/admin/dashboard` and non-admin users to `/dashboard/chart`; auth store persists user payload with the bearer token for route-level display.
+- Observed: landing "Buka Dashboard" CTA now checks authenticated role (mahasiswa/dosen) before routing and redirects unauthenticated users to `/auth/login`.
 - Observed: Nuxt production build succeeds after adding `/dashboard/chart`.
 - Observed: Local route smoke test returned HTTP 200 for `/dashboard/chart` and `/auth/login` on dev server port 3001.
 - Observed: CesiumJS is installed in the Nuxt app and configured with a public Cesium ion token runtime config.
@@ -196,6 +197,7 @@
 - docs/handoffs/HANDOFF_TEMPLATE.md
 - api/
 - app/
+- app/app/pages/index.vue
 - app/app/pages/dashboard/chart.vue
 - app/app/pages/dashbord/map.vue
 - app/app/pages/auth/login.vue

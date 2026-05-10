@@ -16,7 +16,7 @@
       class="fixed left-4 right-4 top-4 z-50 flex min-h-16 items-center justify-between gap-4 rounded-2xl border border-white/15 bg-white/95 px-4 shadow-2xl shadow-emerald-950/15 backdrop-blur-md sm:left-6 sm:right-6 sm:top-6 sm:px-6"
     >
       <div class="flex min-w-0 items-center gap-3">
-        <NuxtLink class="flex min-w-0 items-center gap-3" to="/dashbord/map">
+        <div class="flex min-w-0 items-center gap-3">
           <Icon
             icon="solar:map-point-wave-bold-duotone"
             class="h-7 w-7 shrink-0 text-primary"
@@ -25,7 +25,7 @@
             class="truncate text-sm font-semibold text-emerald-900 sm:text-base"
             >GeoVisit PJJ IT</span
           >
-        </NuxtLink>
+        </div>
       </div>
 
       <div class="flex items-center gap-2 sm:gap-4">
