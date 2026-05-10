@@ -90,6 +90,8 @@ class MahasiswaRepository
             'wilayah_id' => $geocodingPayload['wilayah_id'],
             'latitude' => $geocodingPayload['latitude'],
             'longitude' => $geocodingPayload['longitude'],
+            'is_valid_address' => $geocodingPayload['is_valid_address'] ?? true,
+            'geocoding_status' => $geocodingPayload['geocoding_status'] ?? null,
             'dibuat_oleh_user_id' => $payload['dibuat_oleh_user_id'] ?? null,
             'diubah_oleh_user_id' => $payload['diubah_oleh_user_id'] ?? null,
         ]);
@@ -130,6 +132,8 @@ class MahasiswaRepository
             $mahasiswa->wilayah_id = $geocodingPayload['wilayah_id'];
             $mahasiswa->latitude = $geocodingPayload['latitude'];
             $mahasiswa->longitude = $geocodingPayload['longitude'];
+            $mahasiswa->is_valid_address = $geocodingPayload['is_valid_address'] ?? true;
+            $mahasiswa->geocoding_status = $geocodingPayload['geocoding_status'] ?? null;
             $geocodingReference = $geocodingPayload['reference'];
         }
 
@@ -280,6 +284,8 @@ class MahasiswaRepository
                     'wilayah_id' => $klasifikasi['wilayah_id'] ?? null,
                     'latitude' => $klasifikasi['latitude'] ?? null,
                     'longitude' => $klasifikasi['longitude'] ?? null,
+                    'is_valid_address' => $klasifikasi['is_valid_address'] ?? true,
+                    'geocoding_status' => $klasifikasi['geocoding_status'] ?? null,
                     'dibuat_oleh_user_id' => $createdBy,
                     'diubah_oleh_user_id' => $createdBy,
                 ]);
@@ -401,14 +407,18 @@ class MahasiswaRepository
                 'alamat' => $alamat,
                 'geocoding_payload' => [
                     'wilayah_id' => null,
-                    'latitude' => null,
-                    'longitude' => null,
+                    'latitude' => -7.275612,
+                    'longitude' => 112.793910,
+                    'is_valid_address' => false,
+                    'geocoding_status' => $reference['review_reason'],
                     'reference' => $reference,
                 ]
             ];
         }
 
         $geocodingPayload['reference']['needs_review'] = false;
+        $geocodingPayload['is_valid_address'] = true;
+        $geocodingPayload['geocoding_status'] = null;
 
         return [
             'alamat' => $alamat,
@@ -476,10 +486,6 @@ class MahasiswaRepository
             $alasan[] = 'Kolom nama wajib diisi.';
         }
 
-        if ($alamat === '') {
-            $alasan[] = 'Kolom alamat wajib diisi.';
-        }
-
         if (empty($alasan)) {
             $classification = $this->addressWilayahClassifierRepository->classifyOne($alamat, $useExternalGeocoding);
             $mappedWilayah = $classification['mapping']['wilayah'] ?? [];
@@ -506,14 +512,15 @@ class MahasiswaRepository
                     ],
                 ]);
 
-                $alasan[] = $reviewReason;
                 $hasilKlasifikasi = [
                     'status_mapping' => $classification['mapping']['status'] ?? null,
                     'needs_confirmation' => $classification['needs_confirmation'] ?? null,
                     'confidence_score' => $classification['mapping']['confidence']['score'] ?? null,
                     'wilayah_id' => null,
-                    'latitude' => null,
-                    'longitude' => null,
+                    'latitude' => -7.275612,
+                    'longitude' => 112.793910,
+                    'is_valid_address' => false,
+                    'geocoding_status' => $reviewReason,
                     'geocoding_source' => $classification['geocoding']['source'] ?? null,
                     'external_geocoding_used' => $classification['external_geocoding']['used'] ?? false,
                     'needs_review' => true,
@@ -527,6 +534,8 @@ class MahasiswaRepository
                     'wilayah_id' => $wilayahId,
                     'latitude' => $classification['geocoding']['latitude'] ?? null,
                     'longitude' => $classification['geocoding']['longitude'] ?? null,
+                    'is_valid_address' => true,
+                    'geocoding_status' => null,
                     'geocoding_source' => $classification['geocoding']['source'] ?? null,
                     'external_geocoding_used' => $classification['external_geocoding']['used'] ?? false,
                     'needs_review' => false,

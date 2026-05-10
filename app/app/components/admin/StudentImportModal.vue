@@ -97,7 +97,7 @@
                     </tr>
                   </thead>
                   <tbody class="text-sm">
-                    <tr v-for="row in previewRows" :key="row.baris" :class="row.isImportable ? 'border-l-4 border-primary bg-primary-container/10' : 'border-l-4 border-error bg-error-container/20'">
+                    <tr v-for="row in previewRows" :key="row.baris" :class="row.isImportable && row.isValidAddress ? 'border-l-4 border-primary bg-primary-container/10' : 'border-l-4 border-error bg-error-container/20'">
                       <td class="px-4 py-3">
                         <input
                           v-model="selectedRows"
@@ -201,9 +201,10 @@ const previewRows = computed(() => {
       nama: row.input?.nama || '',
       alamat: row.input?.alamat || '',
       wilayahId: classification.wilayah_id || '',
+      isValidAddress: classification.is_valid_address ?? true,
       confidenceLabel: score === null || score === undefined ? '-' : `${Math.round(Number(score) * 100)}%`,
       statusLabel: isImportable ? 'Dapat import' : 'Tidak dapat import',
-      reasonLabel: Array.isArray(row.alasan) && row.alasan.length > 0 ? row.alasan.join('; ') : '-'
+      reasonLabel: Array.isArray(row.alasan) && row.alasan.length > 0 ? row.alasan.join('; ') : (classification.geocoding_status || '-')
     }
   })
 })

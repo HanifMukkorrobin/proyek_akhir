@@ -26,6 +26,7 @@ class DashboardMapRepository
         $nextLength = $nextLevelKey !== null ? self::LEVELS[$nextLevelKey]['length'] : null;
         $parentId = $this->normalizeNullableString($filters['parent_id'] ?? null);
         $limit = $this->normalizeLimit($filters['limit'] ?? null, 1000);
+        $excludeInvalid = filter_var($filters['exclude_invalid'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         if ($parentId !== null && strlen($parentId) >= $length) {
             throw new InvalidArgumentException('parent_id harus berada di level yang lebih tinggi dari level titik yang diminta.');
@@ -47,6 +48,10 @@ class DashboardMapRepository
 
         if ($parentId !== null) {
             $aggregate->where('wilayah_id', 'like', $parentId . '%');
+        }
+
+        if ($excludeInvalid) {
+            $aggregate->where('is_valid_address', true);
         }
 
         $aggregate->groupByRaw("LEFT(wilayah_id, {$length})");
@@ -116,9 +121,14 @@ class DashboardMapRepository
 
         $query = Mahasiswa::query()
             ->with('wilayah')
-            ->where('wilayah_id', 'like', $wilayahId . '%')
-            ->orderBy('nama')
-            ->orderBy('mahasiswa_id');
+            ->where('wilayah_id', 'like', $wilayahId . '%');
+
+        $excludeInvalid = filter_var($filters['exclude_invalid'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($excludeInvalid) {
+            $query->where('is_valid_address', true);
+        }
+
+        $query->orderBy('nama')->orderBy('mahasiswa_id');
 
         $search = trim((string) ($filters['q'] ?? $filters['search'] ?? ''));
 
@@ -174,6 +184,11 @@ class DashboardMapRepository
 
         if ($wilayahId !== null) {
             $query->where('wilayah_id', 'like', $wilayahId . '%');
+        }
+
+        $excludeInvalid = filter_var($filters['exclude_invalid'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($excludeInvalid) {
+            $query->where('is_valid_address', true);
         }
 
         $this->applyMahasiswaBoundsFilter($query, $filters);

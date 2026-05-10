@@ -1017,8 +1017,9 @@ const fetchStudentsByRegion = async (point, page = 1) => {
       `/dashboard/map/wilayah/${point.wilayahId}/mahasiswa`,
       {
         params: {
-          page,
-          per_page: 8,
+          page: studentPagination.value.halaman_sekarang,
+          per_page: studentPagination.value.per_halaman,
+          exclude_invalid: authStore.user?.role !== "admin",
         },
       },
     );
@@ -1061,6 +1062,8 @@ const fetchStudentSearch = async (query) => {
       params: {
         q: query,
         limit: SEARCH_RESULT_LIMIT,
+        wilayah_id: activeParentId.value,
+        exclude_invalid: authStore.user?.role !== "admin",
       },
     });
     const payload = unwrapData(response);

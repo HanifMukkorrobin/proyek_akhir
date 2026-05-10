@@ -176,6 +176,11 @@
 - Increased province label readability in the national view by strengthening font size, far-distance opacity, background alpha, and outline weight.
 - Audited frontend theme coverage and normalized the remaining admin shell/pages/modals that still used hard-coded light backgrounds, borders, and hover states.
 - Re-enabled the admin topbar theme toggle and made the legacy admin dashboard chart react to `data-theme` changes.
+- Implemented geocoding fallback to PENS default coordinates (`-7.275612`, `112.793910`) for invalid/unmatched addresses.
+- Created database migration to add `is_valid_address` and `geocoding_status` to `mahasiswa` table.
+- Filtered `is_valid_address=false` from Dashboard statistics, distribution rows, and tree hierarchy.
+- Filtered `is_valid_address=false` from Dashboard Map points and search APIs specifically for non-admin users.
+- Added a new summary card on the Admin Dashboard displaying the total count of 'Data Lokasi Bermasalah' for manual review.
 
 ## In Progress
 - None.

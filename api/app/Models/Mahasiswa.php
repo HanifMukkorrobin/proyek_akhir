@@ -31,9 +31,15 @@ class Mahasiswa extends Model
         'longitude',
         'wilayah_id',
         'alamat',
+        'is_valid_address',
+        'geocoding_status',
         'dibuat_oleh_user_id',
         'diubah_oleh_user_id',
         'dihapus_oleh_user_id',
+    ];
+
+    protected $casts = [
+        'is_valid_address' => 'boolean',
     ];
 
     public function wilayah(): BelongsTo

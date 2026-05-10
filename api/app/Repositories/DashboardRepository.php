@@ -17,6 +17,7 @@ class DashboardRepository
     public function getSummary(): array
     {
         $jumlahMahasiswa = Mahasiswa::query()->count();
+        $jumlahDataInvalid = Mahasiswa::query()->where('is_valid_address', false)->count();
         $jumlahUser = User::query()->count();
         $jumlahProvinsiTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['provinsi']);
         $jumlahKabupatenKotaTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['kabupaten']);
@@ -26,6 +27,7 @@ class DashboardRepository
 
         return [
             'jumlah_mahasiswa' => $jumlahMahasiswa,
+            'jumlah_data_invalid' => $jumlahDataInvalid,
             'jumlah_user_terdaftar' => $jumlahUser,
             'jumlah_provinsi_terjangkau' => $jumlahProvinsiTerjangkau,
             'jumlah_kabupaten_kota_terjangkau' => $jumlahKabupatenKotaTerjangkau,
@@ -53,7 +55,7 @@ class DashboardRepository
 
         return [
             'group_by' => $groupBy,
-            'total_mahasiswa' => Mahasiswa::query()->count(),
+            'total_mahasiswa' => Mahasiswa::query()->where('is_valid_address', true)->count(),
             'total_wilayah_terjangkau' => $this->countReachedRegions($length),
             'rows' => $rows,
             'categories' => $categories,
@@ -93,6 +95,7 @@ class DashboardRepository
             $q->from('mahasiswa')
                 ->selectRaw('COUNT(mahasiswa_id)')
                 ->whereNull('dihapus_pada')
+                ->where('is_valid_address', true)
                 ->whereRaw('mahasiswa.wilayah_id LIKE wilayah.wilayah_id || \'%\'');
         }, 'jumlah_mahasiswa');
 
@@ -144,7 +147,7 @@ class DashboardRepository
     private function getDistributionRows(string $groupBy, ?int $limit = null): array
     {
         $length = $this->getGroupLength($groupBy);
-        $totalMahasiswa = Mahasiswa::query()->count();
+        $totalMahasiswa = Mahasiswa::query()->where('is_valid_address', true)->count();
 
         $query = Mahasiswa::query()
             ->selectRaw("LEFT(mahasiswa.wilayah_id, {$length}) as kode_wilayah")
@@ -155,6 +158,7 @@ class DashboardRepository
             ->selectRaw('w.latitude as latitude')
             ->selectRaw('w.longitude as longitude')
             ->whereNotNull('mahasiswa.wilayah_id')
+            ->where('mahasiswa.is_valid_address', true)
             ->whereRaw('char_length(mahasiswa.wilayah_id) >= ?', [$length])
             ->join('wilayah as w', function ($join) use ($length) {
                 $join->on(DB::raw("LEFT(mahasiswa.wilayah_id, {$length})"), '=', 'w.wilayah_id')
@@ -202,6 +206,7 @@ class DashboardRepository
     {
         return (int) Mahasiswa::query()
             ->whereNotNull('wilayah_id')
+            ->where('is_valid_address', true)
             ->whereRaw('char_length(wilayah_id) >= ?', [$length])
             ->selectRaw("COUNT(DISTINCT LEFT(wilayah_id, {$length})) as aggregate")
             ->value('aggregate');

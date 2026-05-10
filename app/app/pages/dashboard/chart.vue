@@ -113,7 +113,7 @@
         <span>{{ errorMessage }}</span>
       </div>
 
-      <section class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section class="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-3">
         <article
           class="rounded-2xl border border-slate-200 bg-white p-6 shadow-panel dark:border-emerald-900/70 dark:bg-forest-900"
         >
@@ -122,7 +122,7 @@
               <p
                 class="text-label-caps uppercase text-slate-500 dark:text-emerald-100/60"
               >
-                Total Mahasiswa PJJ 2023
+                Total Data Mahasiswa
               </p>
               <div
                 v-if="isLoading"
@@ -187,6 +187,41 @@
               >{{ coveragePercent }}% Coverage</span
             >
           </div>
+        </article>
+
+        <article
+          class="rounded-2xl border border-slate-200 bg-white p-6 shadow-panel dark:border-emerald-900/70 dark:bg-forest-900"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p
+                class="text-label-caps uppercase text-slate-500 dark:text-emerald-100/60"
+              >
+                Data Mahasiswa Dengan Lokasi Tidak Valid
+              </p>
+              <div
+                v-if="isLoading"
+                class="mt-4 h-12 w-28 animate-pulse rounded-lg bg-surface-container-high dark:bg-forest-800"
+              />
+              <p
+                v-else
+                class="mt-3 text-5xl font-black leading-none text-slate-950 dark:text-white"
+              >
+                {{ formatNumber(summary.jumlah_data_invalid) }}
+              </p>
+            </div>
+            <div
+              class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+            >
+              <Icon
+                icon="solar:map-point-remove-bold-duotone"
+                class="h-7 w-7"
+              />
+            </div>
+          </div>
+          <p class="mt-9 text-sm text-slate-500 dark:text-emerald-100/60">
+            Lokasi fallback ke PENS Surabaya.
+          </p>
         </article>
       </section>
 
@@ -428,6 +463,7 @@ const regionSearch = ref("");
 
 const summary = ref({
   jumlah_mahasiswa: 0,
+  jumlah_data_invalid: 0,
   jumlah_user_terdaftar: 0,
   jumlah_provinsi_terjangkau: 0,
   jumlah_kabupaten_kota_terjangkau: 0,
@@ -581,6 +617,7 @@ const extractErrorMessage = (error, fallback) => {
 
 const normalizeSummary = (payload) => ({
   jumlah_mahasiswa: Number(payload?.jumlah_mahasiswa || 0),
+  jumlah_data_invalid: Number(payload?.jumlah_data_invalid || 0),
   jumlah_user_terdaftar: Number(payload?.jumlah_user_terdaftar || 0),
   jumlah_provinsi_terjangkau: Number(payload?.jumlah_provinsi_terjangkau || 0),
   jumlah_kabupaten_kota_terjangkau: Number(

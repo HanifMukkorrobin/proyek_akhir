@@ -25,7 +25,7 @@
       {{ errorMessage }}
     </div>
 
-    <section class="grid grid-cols-1 gap-5 md:grid-cols-2">
+    <section class="grid grid-cols-1 gap-5 md:grid-cols-3">
       <article
         v-for="card in summaryCards"
         :key="card.key"
@@ -172,6 +172,7 @@ const { $api } = useNuxtApp()
 
 const summary = ref({
   jumlah_mahasiswa: 0,
+  jumlah_data_invalid: 0,
   jumlah_user_terdaftar: 0
 })
 const summaryLoading = ref(false)
@@ -208,6 +209,14 @@ const summaryCards = computed(() => [
     icon: 'solar:square-academic-cap-bold-duotone'
   },
   {
+    key: 'invalid',
+    label: 'Data Lokasi Bermasalah',
+    value: formatNumber(summary.value.jumlah_data_invalid),
+    description: 'Mahasiswa dengan lokasi gagal diverifikasi (diisi PENS).',
+    iconClass: 'bg-error/10 text-error',
+    icon: 'solar:map-point-remove-bold-duotone'
+  },
+  {
     key: 'users',
     label: 'User Terdaftar',
     value: formatNumber(summary.value.jumlah_user_terdaftar),
@@ -238,6 +247,7 @@ const extractErrorMessage = (error, fallback = 'Terjadi kesalahan saat memuat da
 const normalizeSummary = (payload) => {
   return {
     jumlah_mahasiswa: Number(payload?.jumlah_mahasiswa || 0),
+    jumlah_data_invalid: Number(payload?.jumlah_data_invalid || 0),
     jumlah_user_terdaftar: Number(payload?.jumlah_user_terdaftar || 0)
   }
 }
