@@ -9,15 +9,6 @@
         >
           <Icon icon="solar:hamburger-menu-linear" class="h-5 w-5" />
         </button>
-
-        <div class="relative hidden w-full max-w-md sm:block">
-          <Icon icon="solar:magnifer-linear" class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-outline" />
-          <input
-            class="h-11 w-full rounded-full border-none bg-surface-container-low py-2 pl-12 pr-4 text-body-sm text-on-surface-variant outline-none transition focus:ring-2 focus:ring-primary"
-            :placeholder="searchPlaceholder"
-            type="text"
-          />
-        </div>
       </div>
 
       <div class="flex shrink-0 items-center gap-2 md:gap-4">
@@ -29,15 +20,6 @@
         >
           <Icon v-if="theme === 'dark'" icon="solar:sun-2-linear" class="h-5 w-5" />
           <Icon v-else icon="solar:moon-linear" class="h-5 w-5" />
-        </button>
-
-        <button class="relative flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low" type="button">
-          <Icon icon="solar:bell-bold-duotone" class="h-5 w-5" />
-          <span class="absolute right-2 top-2 h-2 w-2 rounded-full bg-error" />
-        </button>
-
-        <button class="hidden h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low md:flex" type="button">
-          <Icon icon="solar:question-circle-bold-duotone" class="h-5 w-5" />
         </button>
 
         <div class="hidden h-8 w-px bg-primary-fixed/20 md:block" />

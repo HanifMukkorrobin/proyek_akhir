@@ -1,0 +1,82 @@
+[
+  {
+    "route": "/",
+    "finalUrl": "http://localhost:3010/",
+    "title": "GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/01-landing.jpg"
+  },
+  {
+    "route": "/auth/login",
+    "finalUrl": "http://localhost:3010/auth/login",
+    "title": "Login | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/02-login.jpg"
+  },
+  {
+    "route": "/auth/login -> admin login",
+    "finalUrl": "http://localhost:3010/admin/dashboard",
+    "title": "Dashboard | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/03-admin-dashboard-after-login.jpg"
+  },
+  {
+    "route": "/admin",
+    "finalUrl": "http://localhost:3010/admin/dashboard",
+    "title": "Dashboard | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/04-admin-redirect.jpg",
+    "note": "Route redirects to /admin/dashboard."
+  },
+  {
+    "route": "/admin/dashboard",
+    "finalUrl": "http://localhost:3010/admin/dashboard",
+    "title": "Dashboard | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/05-admin-dashboard.jpg",
+    "note": "Copied from the successful dashboard capture after login because repeat capture timed out on Highcharts."
+  },
+  {
+    "route": "/admin/data-master",
+    "finalUrl": "http://localhost:3010/admin/data-master",
+    "title": "Data Master | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/06-admin-data-master.jpg"
+  },
+  {
+    "route": "/admin/data-master/wilayah",
+    "finalUrl": "http://localhost:3010/admin/data-master/wilayah",
+    "title": "Manajemen Wilayah | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/07-admin-data-master-wilayah.jpg"
+  },
+  {
+    "route": "/admin/mahasiswa",
+    "finalUrl": "http://localhost:3010/admin/mahasiswa",
+    "title": "Direktori Mahasiswa | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/08-admin-mahasiswa.jpg"
+  },
+  {
+    "route": "/admin/users",
+    "finalUrl": "http://localhost:3010/admin/users",
+    "title": "Manajemen User | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/09-admin-users.jpg"
+  },
+  {
+    "route": "/admin/log",
+    "finalUrl": "http://localhost:3010/admin/log",
+    "title": "Log Aktivitas | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/10-admin-log.jpg"
+  },
+  {
+    "route": "/admin/log-simulasi",
+    "finalUrl": "http://localhost:3010/admin/log",
+    "title": "Log Aktivitas | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/11-admin-log-simulasi-redirect.jpg"
+  },
+  {
+    "route": "/dashboard/chart",
+    "finalUrl": "http://localhost:3010/dashboard/chart",
+    "title": "Chart Dashboard | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/12-dashboard-chart.jpg"
+  },
+  {
+    "route": "/dashboard/map",
+    "finalUrl": "http://localhost:3010/dashboard/map",
+    "title": "3D Map Dashboard | GeoVisit PJJ IT",
+    "filePath": "/Users/tra-mac-020423/Documents/nuklir/proyek_akhir/outputs/screenshots/geovisit-pages/13-dashboard-map.jpg"
+  }
+]

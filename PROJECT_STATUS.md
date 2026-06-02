@@ -85,6 +85,7 @@
 - Observed: wilayah and mahasiswa selections now re-center the camera into a terrain-relative top-down view, and direct mahasiswa marker clicks follow the same focus behavior as list selections.
 - Observed: kabupaten, kecamatan, and desa now render scoped region labels again with per-level label limits and distance-based fading.
 - Observed: province labels in the default Indonesia-wide view now use larger typography and stronger opacity so they stay readable against the satellite base layer.
+- Observed: 3D map region labels now show `Jumlah Mahasiswa` at every wilayah level, including kecamatan and desa/kelurahan drilldown.
 - Observed: admin views now expose an on-screen theme toggle again, and the remaining admin pages/modals/tables have been normalized to use shared theme-aware tokens instead of hard-coded light surfaces.
 - Observed: the legacy `/admin/dashboard` Highcharts view now re-renders against the active theme palette when dark/light mode changes.
 
@@ -174,6 +175,7 @@
 - Centered wilayah and mahasiswa selections into a near-vertical top-down camera view with terrain-relative focus heights, and made direct mahasiswa marker clicks use the same focus flow.
 - Restored region labels for kabupaten and deeper drilldown levels using smaller per-level label budgets and distance-based visibility controls.
 - Increased province label readability in the national view by strengthening font size, far-distance opacity, background alpha, and outline weight.
+- Extended 3D map count labels to kecamatan and desa/kelurahan levels.
 - Audited frontend theme coverage and normalized the remaining admin shell/pages/modals that still used hard-coded light backgrounds, borders, and hover states.
 - Re-enabled the admin topbar theme toggle and made the legacy admin dashboard chart react to `data-theme` changes.
 - Implemented geocoding fallback to PENS default coordinates (`-7.275612`, `112.793910`) for invalid/unmatched addresses.

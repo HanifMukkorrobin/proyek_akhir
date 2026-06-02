@@ -38,10 +38,6 @@
         </div>
       </div>
 
-      <button class="flex w-full items-center gap-4 rounded-lg px-5 py-4 text-left text-body-md text-on-surface-variant transition hover:translate-x-1 hover:bg-surface-container-low/60 hover:text-primary" type="button">
-        <Icon icon="solar:settings-bold-duotone" class="h-6 w-6" />
-        <span>Settings</span>
-      </button>
       <button
         class="flex w-full items-center gap-4 rounded-lg px-5 py-4 text-left text-body-md text-error transition hover:translate-x-1 hover:bg-error-container/40"
         type="button"

@@ -508,9 +508,9 @@ const REGION_LABEL_VISIBILITY = {
     scaleNear: 1.12,
     scaleFar: 0.96,
     alphaNear: 1,
-    alphaFar: 0.58,
+    alphaFar: 1,
     outlineWidth: 5,
-    backgroundAlpha: 0.8,
+    backgroundAlpha: 1,
     multiline: true,
   },
   kabupaten: {
@@ -518,10 +518,10 @@ const REGION_LABEL_VISIBILITY = {
     maxDistance: 1800000,
     scaleNear: 0.95,
     scaleFar: 0.72,
-    alphaNear: 0.96,
-    alphaFar: 0.16,
+    alphaNear: 1,
+    alphaFar: 1,
     outlineWidth: 4,
-    backgroundAlpha: 0.8,
+    backgroundAlpha: 1,
     multiline: true,
   },
   kecamatan: {
@@ -529,22 +529,22 @@ const REGION_LABEL_VISIBILITY = {
     maxDistance: 700000,
     scaleNear: 0.84,
     scaleFar: 0.62,
-    alphaNear: 0.92,
-    alphaFar: 0.12,
+    alphaNear: 1,
+    alphaFar: 1,
     outlineWidth: 4,
-    backgroundAlpha: 0.8,
-    multiline: false,
+    backgroundAlpha: 1,
+    multiline: true,
   },
   desa: {
     font: "800 14px Inter, sans-serif",
     maxDistance: 280000,
     scaleNear: 0.78,
     scaleFar: 0.56,
-    alphaNear: 0.9,
-    alphaFar: 0.08,
+    alphaNear: 1,
+    alphaFar: 1,
     outlineWidth: 4,
-    backgroundAlpha: 0.8,
-    multiline: false,
+    backgroundAlpha: 1,
+    multiline: true,
   },
 };
 const CAMERA_REFRESH_DEBOUNCE_MS = 650;
@@ -1376,7 +1376,7 @@ const getRegionLabelVisibility = (levelKey) =>
 const buildRegionLabelText = (point) => {
   const visibility = getRegionLabelVisibility(point.levelKey);
   return visibility.multiline
-    ? `${point.name}\n${formatNumber(point.count)}`
+    ? `${point.name}\nJumlah Mahasiswa: ${formatNumber(point.count)}`
     : point.name;
 };
 
