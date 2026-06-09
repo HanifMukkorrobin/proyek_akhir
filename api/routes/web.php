@@ -62,4 +62,31 @@ $router->group(['middleware' => 'auth.token'], function () use ($router) {
     $router->put('/mahasiswa/{mahasiswaId}', 'MahasiswaController@update');
     $router->patch('/mahasiswa/{mahasiswaId}', 'MahasiswaController@update');
     $router->delete('/mahasiswa/{mahasiswaId}', 'MahasiswaController@destroy');
+
+    // Visitasi Rencana (dosen only — enforced in repository)
+    $router->get('/visitasi', 'VisitasiController@index');
+    $router->post('/visitasi', 'VisitasiController@store');
+    $router->get('/visitasi/export-rekap-excel', 'SimulasiRuteController@exportRekapExcel');
+    $router->get('/visitasi/{rencanaId}', 'VisitasiController@show');
+    $router->put('/visitasi/{rencanaId}', 'VisitasiController@update');
+    $router->patch('/visitasi/{rencanaId}', 'VisitasiController@update');
+    $router->delete('/visitasi/{rencanaId}', 'VisitasiController@destroy');
+    $router->post('/visitasi/{rencanaId}/selesai', 'VisitasiController@markSelesai');
+
+    // Peserta Visitasi
+    $router->get('/visitasi/{rencanaId}/peserta', 'VisitasiController@pesertaIndex');
+    $router->post('/visitasi/{rencanaId}/peserta', 'VisitasiController@pesertaStore');
+    $router->put('/visitasi/{rencanaId}/peserta/{pesertaId}', 'VisitasiController@pesertaUpdate');
+    $router->patch('/visitasi/{rencanaId}/peserta/{pesertaId}', 'VisitasiController@pesertaUpdate');
+    $router->delete('/visitasi/{rencanaId}/peserta/{pesertaId}', 'VisitasiController@pesertaDestroy');
+
+    // Simulasi Rute
+    $router->post('/visitasi/{rencanaId}/simulasi', 'SimulasiRuteController@simulate');
+    $router->post('/visitasi/simultan', 'SimulasiRuteController@createAndSimulate');
+    $router->get('/visitasi/{rencanaId}/rute', 'SimulasiRuteController@getRute');
+    $router->get('/visitasi/{rencanaId}/rute/history', 'SimulasiRuteController@getRuteHistory');
+    $router->get('/visitasi/{rencanaId}/rute/{ruteId}/print-data', 'SimulasiRuteController@getPrintData');
+
+    // Log Simulasi (admin only — enforced in controller)
+    $router->get('/log-simulasi', 'SimulasiRuteController@logSimulasi');
 });

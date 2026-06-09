@@ -88,6 +88,21 @@
 - Observed: 3D map region labels now show `Jumlah Mahasiswa` at every wilayah level, including kecamatan and desa/kelurahan drilldown.
 - Observed: admin views now expose an on-screen theme toggle again, and the remaining admin pages/modals/tables have been normalized to use shared theme-aware tokens instead of hard-coded light surfaces.
 - Observed: the legacy `/admin/dashboard` Highcharts view now re-renders against the active theme palette when dark/light mode changes.
+- Observed: Simulasi Rute Visitasi feature is implemented end-to-end: database migrations (4 tables), Eloquent models (4 models), OSRM routing with Haversine fallback, VisitasiRepository (CRUD + peserta), SimulasiRuteRepository (simulation engine + Excel export), VisitasiController, SimulasiRuteController, and all API routes.
+- Observed: 4 visitasi tables have been successfully migrated to PostgreSQL (`visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, `visitasi_rute_detail`).
+- Observed: OSRM integration uses `driving` profile with `exclude=motorway` for motor and car-without-toll, and standard `driving` for car-with-toll; round-trip done via `/trip` endpoint with `roundtrip=true&source=first&steps=true` (destination parameter and exclude=motorway parameter are bypassed when using the public demo server `router.project-osrm.org` to prevent API errors, and steps=true is added to fetch precise coordinate legs).
+- Observed: frontend 3D Map now draws the simulation path as a 25-meter wide ground corridor polygon (road representation) with a glowing polyline center line, utilizing the `@mapbox/polyline` package to decode OSRM step geometries for precise alignment.
+- Observed: frontend route simulation workflow has been migrated into the main 3D Map dashboard (/dashboard/map) as a floating modal panel (SimulasiModal.vue), and the old standalone page has been removed.
+- Observed: `/dashboard/visitasi/[rencanaId]/print/[ruteId]` print-preview page uses CSS `@media print` so Dosen can save to PDF via browser Ctrl+P.
+- Observed: Excel rekap export is implemented as zero-dependency native XLSX builder (ZipArchive) without external library dependency.
+- Observed: admin `/admin/log-simulasi` page is now a full standalone page (no longer redirects to `/admin/log`) with filter, pagination, and summary cards.
+- Observed: admin sidebar now includes `Log Aktivitas` and `Log Simulasi` as separate menu items.
+- Observed: dashboard chart page mode switcher now includes `Simulasi Rute` button for Dosen navigation, pointing to `/dashboard/map?simulasi=true`.
+- Observed: SimulasiCesiumRuteLayer.vue is renamed or consolidated, and map.vue handles OSRM route lines, start points, and student markers dynamically when the simulation modal is active.
+- Observed: the route simulation creation workflow is unified into a single side-panel form Mode B in SimulasiModal.vue containing name, description, search & select participants, terrain-relative start coordinate capture from map clicks, and vehicle settings, directly submitting to /visitasi/simultan and focusing on the route calculation results.
+- Observed: the obsolete "Peserta" and "Pengaturan" tabs have been removed from SimulasiModal.vue, leaving only "Rencana" and "Hasil" tabs for a streamlined two-tab workflow.
+- Observed: the off-by-one segment mapping bug in the TSP calculator has been fixed in SimulasiRuteRepository.php, correctly mapping OSRM route legs to the waypoints representing each student's incoming distance and travel duration.
+- Observed: the route simulation UI in SimulasiModal.vue immediately clears the old route and participant markers from the map upon selecting another plan, preventing display of stale route data during loading.
 
 ## Done
 - Created AGENTS.md.
@@ -197,6 +212,8 @@
 - Risk: External geocoding remains unsuitable for large bulk imports unless persistent cache or a non-public/batch-capable provider is added; tracked under API-049.
 
 ## Recently Touched Areas
+- api/app/Repositories/SimulasiRuteRepository.php
+- app/app/components/simulasi/SimulasiModal.vue
 - .gitignore
 - AGENTS.md
 - PROJECT_STATUS.md
@@ -225,30 +242,13 @@
 ## Assumptions / Unknowns
 - Assumption: connection in `api/.env` points to active working local DB.
 - Unknown: final production DB host/credential strategy.
-- Unknown: route optimization method and objective function.
-- Unknown: required response schema for final route simulation.
+- Assumption: OSRM public demo server (`router.project-osrm.org`) is used for development; production may require self-hosted OSRM.
 
 ## Next Recommended Steps
-- Address remaining classifier/geocoding backlog: persist Nominatim cache, add data-driven kabupaten/kota aliases, evaluate phonetic fallback, and move stop-word tuning to config.
-- Validate internal-only import scan against a real 200-row file and review rows marked `needs_review`.
-- Define route simulation inputs, constraints, and expected output.
-- Run browser performance check on `/dashbord/map` with live API data and tune marker limits per device if needed.
-- Validate terrain marker accuracy and loading impact on target internet conditions, since world terrain sampling adds async requests outside the local API.
-- Validate the revised drilldown UX in browser: child levels now require an explicit selected parent region before zoom-driven fetch occurs.
-- Validate the click-first drilldown UX in browser and tune whether parent clicks should also open mahasiswa details or stay navigation-only.
-- Validate the new top-down selection framing in browser and tune per-level focus heights if some scopes still feel too high or too close.
-- Tune deeper-level label budgets if kecamatan/desa still feel too dense on lower-end devices.
-- Check whether province labels still need slightly larger background padding after live browser review on wide desktop screens.
-- Run a browser pass across admin pages/modal flows in both light and dark mode to catch any remaining contrast edge cases after the token migration.
-- Consider pre-aggregated materialized map summaries if global kabupaten/kecamatan queries need to scale beyond current local dataset.
-- Add automated tests for public wilayah endpoint behavior.
-- Apply repository pattern to next public/private API endpoints.
-- Add automated tests for classifier endpoint and confidence scoring edge cases.
-- Review and tune ambiguous village matches from real production samples.
-- Validate outbound connectivity and Nominatim usage policy compliance in deployment environment.
-- Add monitoring for Nominatim timeout/rate-limit behavior.
-- Optionally collapse duplicate terms in token chunks (e.g. repeated village names) for cleaner token list.
-- Add migration files to codify schema in source control.
-- Evaluate whether CSS minification can be safely re-enabled after upstream `csso/css-tree` compatibility update.
-- Align deployment/runtime environment to define `NUXT_PUBLIC_API_BASE` per target stage.
-- Wire remaining visual-first admin logs screen to live backend APIs when endpoint contracts are ready.
+- **[P0 – Simulasi Rute]** Test end-to-end simulasi flow with real dosen account: create rencana → add peserta → set titik awal → run simulasi → verify OSRM response → export PDF/Excel.
+- **[P1]** Verify OSRM public demo server accessibility from deployment environment; plan self-hosted OSRM if needed.
+- **[P2]** Address remaining classifier/geocoding backlog: persist Nominatim cache, add data-driven kabupaten/kota aliases.
+- **[P2]** Run browser pass on simulasi page in both light/dark mode on mobile and desktop breakpoints.
+- **[P2]** Add markSelesai / rencana lifecycle state transitions to simulasi frontend.
+- **[P3]** Add automated tests for public wilayah endpoint behavior.
+- **[P3]** Evaluate whether CSS minification can be safely re-enabled after upstream `csso/css-tree` compatibility update.

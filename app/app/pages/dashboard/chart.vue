@@ -98,6 +98,14 @@
               <Icon icon="solar:earth-bold-duotone" class="h-5 w-5" />
               3D Map Mode
             </NuxtLink>
+            <NuxtLink
+              v-if="authStore.user?.role === 'dosen'"
+              class="flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-slate-600 transition hover:bg-white sm:px-5 dark:text-emerald-100/70 dark:hover:bg-forest-800"
+              to="/dashboard/map?simulasi=true"
+            >
+              <Icon icon="solar:routing-bold-duotone" class="h-5 w-5" />
+              Simulasi Rute
+            </NuxtLink>
           </div>
         </div>
       </section>

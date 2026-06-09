@@ -29,6 +29,17 @@
       </div>
 
       <div class="flex items-center gap-2 sm:gap-4">
+        <!-- Simulasi Rute button (Dosen only) -->
+        <button
+          v-if="authStore.user?.role === 'dosen'"
+          class="flex h-10 items-center gap-2 rounded-xl bg-primary/10 px-4 text-xs font-bold text-primary transition hover:bg-primary/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
+          type="button"
+          @click="isSimulasiOpen = !isSimulasiOpen"
+        >
+          <Icon icon="solar:routing-bold-duotone" class="h-4 w-4" />
+          <span class="hidden sm:inline">Simulasi Rute</span>
+        </button>
+
         <div class="hidden h-7 w-px bg-emerald-100 sm:block" />
 
         <button
@@ -425,13 +436,24 @@
       />
       <span>{{ mapError }}</span>
     </div>
+
+    <!-- Simulasi Rute Modal Panel -->
+    <SimulasiModal
+      :is-open="isSimulasiOpen"
+      :click-coordinates="mapClickCoords"
+      @close="isSimulasiOpen = false"
+      @update-rute="handleSimulationRouteUpdate"
+      @clear-rute="handleSimulationRouteClear"
+      @set-capture-coordinates="handleSetCaptureCoordinates"
+    />
   </div>
 </template>
 
 <script setup>
 import { Icon } from "@iconify/vue";
+import polyline from "@mapbox/polyline";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "~/stores/auth";
 
 definePageMeta({
@@ -440,6 +462,7 @@ definePageMeta({
 });
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 const config = useRuntimeConfig();
 const { $api } = useNuxtApp();
@@ -611,6 +634,12 @@ const navigationStack = ref([]);
 const currentCoordinate = ref(
   `${INDONESIA_CENTER.lat}, ${INDONESIA_CENTER.lon}`,
 );
+
+// Simulation State Variables
+const isSimulasiOpen = ref(false);
+const isCaptureCoordinatesMode = ref(false);
+const mapClickCoords = ref(null);
+const simulationRouteData = ref(null);
 
 let Cesium = null;
 let viewer = null;
@@ -1206,6 +1235,20 @@ const installClickHandler = () => {
 
   clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   clickHandler.setInputAction((movement) => {
+    // 1. Tangkap klik koordinat jika mode simulasi titik awal aktif
+    if (isCaptureCoordinatesMode.value) {
+      const cartesian = viewer.camera.pickEllipsoid(movement.position, viewer.scene.globe.ellipsoid);
+      if (cartesian) {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+        const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+        
+        mapClickCoords.value = { latitude, longitude };
+        addSimulationClickFeedback(longitude, latitude);
+      }
+      return;
+    }
+
     const picked = viewer.scene.pick(movement.position);
     const pointId = resolvePickedPointId(picked);
 
@@ -1334,9 +1377,15 @@ const addMapEntities = () => {
   try {
     viewer.entities.removeAll();
     clearPrimitiveCollections();
-    addHubEntity();
-    addRegionEntities();
-    addSearchEntities();
+    
+    // Render rute simulasi jika panel simulasi sedang aktif
+    if (isSimulasiOpen.value && simulationRouteData.value) {
+      drawSimulationRouteOnMap();
+    } else {
+      addHubEntity();
+      addRegionEntities();
+      addSearchEntities();
+    }
   } finally {
     viewer.entities.resumeEvents();
     requestSceneRender();
@@ -1788,6 +1837,312 @@ const refreshMapPoints = () => {
   });
 };
 
+// =========================================================================
+// Simulation Helpers & Event Handlers
+// =========================================================================
+const handleSimulationRouteUpdate = ({ detail, peserta, hasil_osrm_raw }) => {
+  simulationRouteData.value = { detail, peserta, hasil_osrm_raw };
+  addMapEntities();
+};
+
+const handleSimulationRouteClear = () => {
+  simulationRouteData.value = null;
+  const existingFeedback = viewer?.entities?.getById('sim-click-feedback');
+  if (existingFeedback && viewer) {
+    viewer.entities.remove(existingFeedback);
+  }
+  addMapEntities();
+};
+
+const handleSetCaptureCoordinates = (active) => {
+  isCaptureCoordinatesMode.value = active;
+};
+
+// Add visual feedback marker when Dosen clicks map to select start point
+const addSimulationClickFeedback = (lon, lat) => {
+  if (!viewer || !Cesium) return;
+  const existing = viewer.entities.getById('sim-click-feedback');
+  if (existing) {
+    viewer.entities.remove(existing);
+  }
+
+  viewer.entities.add({
+    id: 'sim-click-feedback',
+    name: 'Lokasi Titik Awal Terpilih',
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, 100),
+    billboard: {
+      image: createStartMarkerSvg(),
+      width: 38,
+      height: 38,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY
+    },
+    label: {
+      text: 'Titik Awal Terpilih',
+      font: '700 11px Inter, sans-serif',
+      fillColor: Cesium.Color.WHITE,
+      outlineColor: Cesium.Color.fromCssColorString('#1e3a8a'),
+      outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      pixelOffset: new Cesium.Cartesian2(0, -42),
+      showBackground: true,
+      backgroundColor: Cesium.Color.fromCssColorString('#1e40af').withAlpha(0.75),
+      backgroundPadding: new Cesium.Cartesian2(6, 4)
+    }
+  });
+  viewer.scene.requestRender();
+};
+
+// SVG Markers
+const startMarkerSvgUrl = ref('');
+const createStartMarkerSvg = () => {
+  if (startMarkerSvgUrl.value) return startMarkerSvgUrl.value;
+  startMarkerSvgUrl.value = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42">
+      <circle cx="21" cy="21" r="15" fill="#2563eb" stroke="#ffffff" stroke-width="4"/>
+      <path d="M21 12l7 7h-4v9h-6v-9h-4z" fill="#ffffff"/>
+    </svg>
+  `);
+  return startMarkerSvgUrl.value;
+};
+
+const createSimulationStudentMarkerSvg = (number) => {
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42">
+      <circle cx="21" cy="21" r="15" fill="#f59e0b" stroke="#ffffff" stroke-width="4"/>
+      <text x="21" y="26" font-family="Inter, sans-serif" font-weight="900" font-size="15px" fill="#ffffff" text-anchor="middle">${number}</text>
+    </svg>
+  `);
+};
+
+// Polyline Decoder using @mapbox/polyline
+const decodePolyline = (encoded) => {
+  if (!encoded) return [];
+  try {
+    const decoded = polyline.decode(encoded);
+    return decoded.map(coord => ({
+      latitude: coord[0],
+      longitude: coord[1]
+    }));
+  } catch (error) {
+    console.error("Gagal men-decode polyline:", error);
+    return [];
+  }
+};
+
+// Render simulation route polyline and stop billboards in main Cesium
+const drawSimulationRouteOnMap = () => {
+  if (!viewer || !Cesium || !simulationRouteData.value) return;
+
+  const { detail, peserta } = simulationRouteData.value;
+  const positionsToFit = [];
+
+  // 1. Render Titik Awal
+  const startWp = detail.find(d => d.tipe_titik === 'titik_awal');
+  if (startWp) {
+    const lat = Number(startWp.latitude);
+    const lon = Number(startWp.longitude);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 100);
+      positionsToFit.push(pos);
+
+      viewer.entities.add({
+        id: 'sim-start-point',
+        name: startWp.label || 'Titik Awal Dosen',
+        position: pos,
+        billboard: {
+          image: createStartMarkerSvg(),
+          width: 40,
+          height: 40,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+        label: {
+          text: startWp.label || 'Titik Awal Dosen',
+          font: '700 12px Inter, sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.fromCssColorString('#1e3a8a'),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -44),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString('#1d4ed8').withAlpha(0.8)
+        }
+      });
+    }
+  }
+
+  // 2. Render Rute & Detail Kunjungan jika ada hasil
+  if (detail && detail.length > 0) {
+    let flatPath = [];
+    let hasHighPrecisionPath = false;
+
+    // A. Render markers/billboards first
+    detail.forEach((d, index) => {
+      const lat = Number(d.latitude);
+      const lon = Number(d.longitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 50);
+      positionsToFit.push(pos);
+
+      if (d.tipe_titik === 'mahasiswa') {
+        const studentName = d.mahasiswa?.nama || d.label || `Tujuan ${index}`;
+        viewer.entities.add({
+          id: `sim-stop-${d.visitasi_rute_detail_id || index}`,
+          name: studentName,
+          position: pos,
+          billboard: {
+            image: createSimulationStudentMarkerSvg(d.urutan_kunjungan),
+            width: 36,
+            height: 36,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY
+          },
+          label: {
+            text: `${d.urutan_kunjungan}. ${studentName}`,
+            font: '700 11px Inter, sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.fromCssColorString('#78350f'),
+            outlineWidth: 4,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -40),
+            showBackground: true,
+            backgroundColor: Cesium.Color.fromCssColorString('#92400e').withAlpha(0.8)
+          }
+        });
+      }
+    });
+
+    // B. Build polyline/corridor coordinates from OSRM steps
+    const raw = simulationRouteData.value.hasil_osrm_raw;
+    if (raw && raw.trips && raw.trips[0] && raw.trips[0].legs) {
+      const legs = raw.trips[0].legs;
+      legs.forEach(leg => {
+        if (leg.steps && leg.steps.length > 0) {
+          leg.steps.forEach(step => {
+            if (step.geometry) {
+              const decoded = decodePolyline(step.geometry);
+              decoded.forEach(p => {
+                flatPath.push(p.longitude, p.latitude);
+              });
+              hasHighPrecisionPath = true;
+            }
+          });
+        }
+      });
+    }
+
+    if (!hasHighPrecisionPath) {
+      // Fallback: decode geometries of each detail or straight line
+      detail.forEach((d) => {
+        const lat = Number(d.latitude);
+        const lon = Number(d.longitude);
+        if (isNaN(lat) || isNaN(lon)) return;
+
+        if (d.geometri_polyline) {
+          const decodedPoints = decodePolyline(d.geometri_polyline);
+          decodedPoints.forEach(p => {
+            flatPath.push(p.longitude, p.latitude);
+          });
+        } else {
+          flatPath.push(lon, lat);
+        }
+      });
+    }
+
+    // C. Draw corridor (polygon) and polyline on map
+    if (flatPath.length >= 4) {
+      // 1. Polygon corridor (ribbon road shape)
+      viewer.entities.add({
+        id: 'sim-route-corridor',
+        corridor: {
+          positions: Cesium.Cartesian3.fromDegreesArray(flatPath),
+          width: 25.0, // 25 meters wide road representation
+          material: Cesium.Color.fromCssColorString('#10b981').withAlpha(0.35),
+          cornerType: Cesium.CornerType.ROUNDED,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+        }
+      });
+
+      // 2. Polyline center-line (glowing path overlay)
+      viewer.entities.add({
+        id: 'sim-route-polyline',
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(flatPath),
+          width: 4,
+          material: Cesium.Color.fromCssColorString('#34d399'),
+          clampToGround: true
+        }
+      });
+    }
+  } else if (peserta && peserta.length > 0) {
+    // 3. Jika belum ada rute, render marker peserta saat ini (tahap persiapan)
+    peserta.forEach((pes, index) => {
+      const mhs = pes.mahasiswa;
+      if (!mhs) return;
+      const lat = Number(mhs.latitude);
+      const lon = Number(mhs.longitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 50);
+      positionsToFit.push(pos);
+
+      viewer.entities.add({
+        id: `sim-peserta-prep-${pes.visitasi_peserta_id || index}`,
+        name: mhs.nama,
+        position: pos,
+        billboard: {
+          image: createSimulationStudentMarkerSvg(index + 1),
+          width: 36,
+          height: 36,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+        label: {
+          text: mhs.nama,
+          font: '700 11px Inter, sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.fromCssColorString('#4b5563'),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -40),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString('#374151').withAlpha(0.75)
+        }
+      });
+    });
+  }
+
+  // Focus camera
+  if (positionsToFit.length > 0) {
+    viewer.camera.flyToBoundingSphere(
+      Cesium.BoundingSphere.fromPoints(positionsToFit),
+      {
+        duration: 1.5,
+        offset: new Cesium.HeadingPitchRange(
+          Cesium.Math.toRadians(0),
+          Cesium.Math.toRadians(-65),
+          null
+        )
+      }
+    );
+  }
+};
+
+watch(isSimulasiOpen, (isOpen) => {
+  if (!isOpen) {
+    simulationRouteData.value = null;
+    isCaptureCoordinatesMode.value = false;
+    const existing = viewer?.entities?.getById('sim-click-feedback');
+    if (existing && viewer) {
+      viewer.entities.remove(existing);
+    }
+  }
+  addMapEntities();
+});
+
 const flyToIndonesia = (duration = 1.1) => {
   if (!viewer || !Cesium) {
     return;
@@ -2156,6 +2511,11 @@ onMounted(async () => {
   if (!authStore.isAuthenticated) {
     router.replace("/auth/login");
     return;
+  }
+
+  // Cek query parameter untuk langsung membuka panel simulasi
+  if (route.query.simulasi === "true" && authStore.user?.role === "dosen") {
+    isSimulasiOpen.value = true;
   }
 
   await fetchMapPoints("provinsi", {

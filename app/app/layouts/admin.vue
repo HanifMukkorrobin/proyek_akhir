@@ -68,9 +68,14 @@ const navItems = [
     icon: 'solar:user-id-bold-duotone'
   },
   {
-    label: 'Logs',
+    label: 'Log Aktivitas',
     to: '/admin/log',
     icon: 'solar:history-bold-duotone'
+  },
+  {
+    label: 'Log Simulasi',
+    to: '/admin/log-simulasi',
+    icon: 'solar:route-bold-duotone'
   }
 ]
 

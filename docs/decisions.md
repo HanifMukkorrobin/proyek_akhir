@@ -432,6 +432,46 @@
 - Impact: Same 223-row draft now scans to 105 importable, 90 empty-address rejects, and 28 non-empty review rows in under 1 second locally.
 - Follow-up: Fill missing addresses in the import file and add a managed alias table for remaining recurring local abbreviations.
 
+## DEC-055
+- Date: 2026-06-09
+- Context: Implement full end-to-end "Simulasi Rute Visitasi" (Lecturer Visit Route Simulation) feature based on 10 confirmed business rules.
+- Decision: Create 4 database tables (`visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, `visitasi_rute_detail`), corresponding Eloquent models, and OSRM routing integration with Haversine offline fallback. Build a unified tabbed dashboard page `/dashboard/simulasi` for Dosen, a printable print-preview PDF route, a native zip-based Excel rekap exporter, and a standalone admin `/admin/log-simulasi` view.
+- Rationale: Fully address all confirmed business requirements (dosen isolation, vehicle profile support, OSRM routing, custom log separation, and doc printouts) under a repository-first backend pattern and Tailwind + DaisyUI frontend.
+- Impact: Dosen can plan and simulate efficient visitation routes with real road distances (via OSRM `/trip`), print rute PDF printouts, export Excel summaries, and Admins can audit all simulation activity.
+- Follow-up: Add automated tests for the public wilayah and routing endpoints, and integrate the OSRM geometry polyline directly into the Cesium 3D map viewer.
+
+## DEC-056
+- Date: 2026-06-09
+- Context: User requested migrating the standalone route simulation page into a floating panel/modal directly inside the main 3D Map dashboard page.
+- Decision: Migrate the "Simulasi Rute" interface into a floating modal component (`SimulasiModal.vue`) embedded in `map.vue`, clean up the route switcher in `chart.vue`, and delete the obsolete `simulasi.vue` page.
+- Rationale: Unifies 3D exploration and route simulation in a single Cesium instance, improving performance and memory footprint while making the user experience more seamless.
+- Impact: Dosen users can now click a "Simulasi Rute" button directly on the map header, configure and run simulation routes, see the road networks drawn dynamically on the active globe, and close the panel to restore the regular administrative overview.
+- Follow-up: Test end-to-end simulation flow in a browser session.
+
+## DEC-057
+- Date: 2026-06-09
+- Context: Dosen users found the route simulation flow disjointed, requiring them to first create a plan, then add participants separately, then specify settings, then run the OSRM calculation. Also, a nested full-screen modal blocked clicking coordinates on the terrain map.
+- Decision: Unify the route simulation creation workflow into a single side-panel form Mode B inside `SimulasiModal.vue`. The unified form accepts Name, Description, search and add of up to 5 students, a "Klik Peta" tool to capture start coordinates directly from map clicks, and vehicle settings. Once saved, it triggers a single transaction `/visitasi/simultan` and immediately presents the calculated path in the "Hasil" tab.
+- Rationale: Streamlines route planning into a single step, and housing the form inside the floating side panel ensures the main map remains interactive for capturing start coordinates without backdrop interference.
+- Impact: Dosen can create and calculate route simulations instantly in one go, significantly improving usability and coordinate precision.
+- Follow-up: Verify coordinate selection on various screen sizes and run end-to-end user verification.
+
+## DEC-058
+- Date: 2026-06-09
+- Context: With the simulation creation workflow unified, the legacy Peserta and Pengaturan tabs became obsolete and cluttered the UI. Furthermore, distance and duration calculations were inaccurate because waypoints and OSRM route legs were mismatched due to an off-by-one error (mapping leg `idx` to waypoint `idx` instead of `idx - 1`).
+- Decision: Remove the Peserta and Pengaturan tabs and views from `SimulasiModal.vue`. Fix the leg assignment inside `saveRuteDetail` in `SimulasiRuteRepository.php` to fetch `$legs[$idx - 1]` instead of `$legs[$idx]`, aligning each student waypoint with their incoming route segment's distance and duration.
+- Rationale: Simplifies the UI to only Rencana and Hasil tabs, and corrects the mapping of segment distances/durations to show accurate values.
+- Impact: Clean and intuitive two-tab sidebar layout for route simulation, and highly accurate distance and travel time metadata for each waypoint leg.
+- Follow-up: Re-run simulation calculations on existing coordinates to verify the layout and accuracy.
+
+## DEC-059
+- Date: 2026-06-09
+- Context: When clicking an existing simulation plan, the displayed route on the map was not immediately cleared, leading to visual overlap and showing stale route data of the previously selected plan while the asynchronous data fetch for the new plan was in progress.
+- Decision: Immediately clear the local `hasilRute` and `pesertaList` states and emit an empty `update-rute` event from `selectRencana` in `SimulasiModal.vue` before invoking the asynchronous API calls to load the new plan.
+- Rationale: Instantly removes the previous polyline, start points, and student markers from the map view, providing a clean state and responsive visual feedback during the loading phase.
+- Impact: A smooth transition on the Cesium map when selecting different simulation plans, completely avoiding stale visual representation of old routes.
+- Follow-up: Verify the map state resets immediately when clicking between plans with and without simulated routes.
+
 ## Entry Template
 - Date: YYYY-MM-DD
 - Context: <what triggered the decision>
@@ -439,3 +479,4 @@
 - Rationale: <why this option>
 - Impact: <expected consequence>
 - Follow-up: <next verification or action>
+

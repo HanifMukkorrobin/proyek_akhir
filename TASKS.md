@@ -3,8 +3,6 @@
 ## Todo
 | ID | Title | Priority | Owner/Agent | Dependencies | Notes |
 | --- | --- | --- | --- | --- | --- |
-| API-005 | Define route simulation rule set | P0 | Unassigned | API-004 | Placeholder until objective/constraint is confirmed. |
-| API-008 | Implement route simulation service skeleton | P1 | Unassigned | API-005 | Service class and request/response shape baseline. |
 | API-009 | Add endpoint test cases for public wilayah | P1 | Unassigned | API-007 | Cover no-param, wilayah_id, cari, and combined filter behavior. |
 | API-014 | Add automated tests for classifier endpoint | P1 | Unassigned | API-013 | Cover normalization, tokenization, exact and fuzzy matching paths. |
 | API-016 | Tune external geocoding merge heuristics | P1 | Unassigned | API-017 | Refine when Nominatim hint should override internal mapping. |
@@ -110,3 +108,11 @@
 | API-055 | Implement geocoding fallback logic to default PENS coordinates | P0 | Antigravity | API-025, API-030 | Mahasiswa without valid address fallback to Lat: -7.275612, Lon: 112.793910 with `is_valid_address=false` and logged reason. |
 | DB-001 | Add is_valid_address and geocoding_status to mahasiswa table | P0 | Antigravity | None | Added migration for boolean validity flag and string status for fallback reasons. |
 | FE-033 | Implement RBAC address visibility filtering on dashboard and map | P0 | Antigravity | API-055, FE-021 | Exclude invalid addresses from non-admin 3D map, filter main admin charts/tree, and add Data Lokasi Bermasalah card. |
+| API-005 | Define route simulation rule set | P0 | Antigravity | API-004 | Confirmed 10 business rules with stakeholder. |
+| API-008 | Implement route simulation service skeleton | P1 | Antigravity | API-005 | Full end-to-end routing engine with OSRM and Haversine offline fallback. |
+| FE-035 | Unify route simulation creation workflow | P0 | Antigravity | API-008 | Move route simulation creation form into sidebar and handle plans list vs form toggling. |
+| FE-036 | Clean obsolete tabs from route simulation sidebar | P1 | Antigravity | FE-035 | Remove Peserta and Pengaturan tabs and only display Rencana and Hasil tabs. |
+| API-056 | Correct off-by-one segment mapping in TSP simulator | P0 | Antigravity | API-008 | Adjust leg assignment indices in saveRuteDetail to use $legs[$idx - 1] to represent incoming segment distance/duration. |
+| FE-037 | Clear old simulation route and markers immediately upon plan selection | P0 | Antigravity | FE-035 | Immediately clears results and emits empty update-rute event to avoid displaying stale route data during loading. |
+
+
