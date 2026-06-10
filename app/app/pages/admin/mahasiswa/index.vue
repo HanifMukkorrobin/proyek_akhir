@@ -61,10 +61,11 @@
       </div>
 
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[1180px] border-collapse text-left">
+        <table class="w-full min-w-[1260px] border-collapse text-left">
           <thead>
             <tr class="border-b border-outline-variant bg-surface-container-low text-on-surface-variant">
               <th class="px-6 py-4 text-label-caps uppercase">Mahasiswa</th>
+              <th class="px-6 py-4 text-label-caps uppercase">Angkatan</th>
               <th class="px-6 py-4 text-label-caps uppercase">Alamat</th>
               <th class="px-6 py-4 text-label-caps uppercase">Wilayah</th>
               <th class="px-6 py-4 text-label-caps uppercase">Koordinat</th>
@@ -74,8 +75,8 @@
           </thead>
           <tbody v-if="isLoading" class="divide-y divide-outline-variant/20">
             <tr v-for="index in 5" :key="index">
-              <td v-for="column in 6" :key="column" class="px-6 py-4">
-                <div class="h-5 animate-pulse rounded bg-surface-container-high" :class="column === 2 ? 'w-80' : column === 6 ? 'ml-auto w-24' : 'w-36'" />
+              <td v-for="column in 7" :key="column" class="px-6 py-4">
+                <div class="h-5 animate-pulse rounded bg-surface-container-high" :class="column === 3 ? 'w-80' : column === 7 ? 'ml-auto w-24' : 'w-36'" />
               </td>
             </tr>
           </tbody>
@@ -89,6 +90,11 @@
                     <p class="max-w-[260px] truncate font-mono text-[11px] text-on-surface-variant">{{ row.mahasiswa_id }}</p>
                   </div>
                 </div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex rounded-full bg-primary-fixed/15 px-3 py-1 text-xs font-bold text-primary">
+                  {{ row.angkatanLabel }}
+                </span>
               </td>
               <td class="max-w-[360px] px-6 py-4 text-body-sm text-on-surface-variant">
                 <p class="line-clamp-2">{{ row.alamat || '-' }}</p>
@@ -118,7 +124,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td colspan="6" class="px-6 py-14 text-center">
+              <td colspan="7" class="px-6 py-14 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
                     <Icon icon="solar:user-cross-bold-duotone" class="h-6 w-6" />
@@ -264,6 +270,7 @@ const normalizeMahasiswa = (mahasiswa) => {
     raw: mahasiswa,
     initial: makeInitial(mahasiswa.nama),
     wilayahLabel: wilayah.nama || '-',
+    angkatanLabel: mahasiswa.angkatan || '-',
     coordinateLabel: hasCoordinates ? `${Number(mahasiswa.latitude).toFixed(6)}, ${Number(mahasiswa.longitude).toFixed(6)}` : '-',
     hasCoordinates,
     updatedLabel: formatDate(mahasiswa.diubah_pada || mahasiswa.dibuat_pada)

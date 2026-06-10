@@ -3,8 +3,6 @@
 ## Todo
 | ID | Title | Priority | Owner/Agent | Dependencies | Notes |
 | --- | --- | --- | --- | --- | --- |
-| API-005 | Define route simulation rule set | P0 | Unassigned | API-004 | Placeholder until objective/constraint is confirmed. |
-| API-008 | Implement route simulation service skeleton | P1 | Unassigned | API-005 | Service class and request/response shape baseline. |
 | API-009 | Add endpoint test cases for public wilayah | P1 | Unassigned | API-007 | Cover no-param, wilayah_id, cari, and combined filter behavior. |
 | API-014 | Add automated tests for classifier endpoint | P1 | Unassigned | API-013 | Cover normalization, tokenization, exact and fuzzy matching paths. |
 | API-016 | Tune external geocoding merge heuristics | P1 | Unassigned | API-017 | Refine when Nominatim hint should override internal mapping. |
@@ -14,6 +12,9 @@
 | API-051 | Add data-driven kabupaten/kota alias dictionary | P2 | Unassigned | API-023 | Tambah tabel `wilayah_aliases (wilayah_id, alias)` dan merge alias ke `buildSearchKeys` supaya shortform umum (JKT/BDG/SBY/MLG) ter-resolve. |
 | API-052 | Add phonetic fallback matcher (Metaphone) | P2 | Unassigned | API-012 | Tambah pass Metaphone untuk token ≥6 karakter ketika fuzzy Levenshtein gagal lolos threshold adaptif. |
 | API-053 | Move stop-word and estate-word list to config | P2 | Unassigned | API-012 | Pindahkan `STOP_WORDS_PATTERN` ke `config/classifier.php` / env sehingga tuning tidak perlu edit class. |
+| API-057 | Add automated tests for OSRM route simulation | P1 | Unassigned | API-056 | Use approved dummy coordinates or mocked OSRM responses; do not send private mahasiswa locations to public OSRM. |
+| API-058 | Decide production OSRM provider/deployment | P1 | Unassigned | API-056 | Public OSRM demo server is not a production/privacy boundary. Decide self-hosted OSRM or approved provider. |
+| API-059 | Extend visitasi constraints | P2 | Unassigned | API-056 | Add time windows, max visits per route, priority weighting, and explicit end-point exceptions if required. |
 
 ## Doing
 | ID | Title | Priority | Owner/Agent | Dependencies | Notes |
@@ -110,3 +111,25 @@
 | API-055 | Implement geocoding fallback logic to default PENS coordinates | P0 | Antigravity | API-025, API-030 | Mahasiswa without valid address fallback to Lat: -7.275612, Lon: 112.793910 with `is_valid_address=false` and logged reason. |
 | DB-001 | Add is_valid_address and geocoding_status to mahasiswa table | P0 | Antigravity | None | Added migration for boolean validity flag and string status for fallback reasons. |
 | FE-033 | Implement RBAC address visibility filtering on dashboard and map | P0 | Antigravity | API-055, FE-021 | Exclude invalid addresses from non-admin 3D map, filter main admin charts/tree, and add Data Lokasi Bermasalah card. |
+| API-005 | Define route simulation rule set | P0 | Codex | API-004 | MVP rule: selected valid mahasiswa coordinates, default PENS start point, OSRM `trip` for optimized order, OSRM `route` for fixed order, GeoJSON geometry and step-level route details. |
+| DB-002 | Add visitasi simulation schema | P0 | Codex | API-005 | Added `visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, and `visitasi_rute_detail`; local migration ran successfully. |
+| DB-003 | Normalize legacy visitasi simulation columns | P0 | Codex | DB-002 | Added compatibility migration for existing local `visitasi_*` tables with legacy column names, preserving data while enabling the new saved simulation contract. |
+| API-008 | Implement route simulation service skeleton | P1 | Codex | API-005, DB-002 | Added protected `POST /visitasi/simulasi-rute` using OSRM with `steps=true`, `geometries=geojson`, `overview=full`, and `annotations=duration,distance`. |
+| API-056 | Implement OSRM route simulation MVP | P0 | Codex | API-008 | Supports OSRM `trip` and `route`, returns ordered waypoints, ordered mahasiswa, route geometry, legs, leg summaries, raw OSRM response, and optional persistence. |
+| FE-035 | Wire 3D map to OSRM route simulation | P0 | Codex | API-056, FE-021 | Added mahasiswa destination selection, OSRM run action, distance/duration/legs/steps summary, and Cesium polyline rendering from OSRM GeoJSON geometry. |
+| API-060 | Add saved simulation list/detail contract | P0 | Codex | API-056 | Added `GET /visitasi/simulasi-rute`, `GET /visitasi/simulasi-rute/{simulationId}`, vehicle metadata, and persisted detail transformation with geometry, legs, steps, and ordered waypoints. |
+| FE-036 | Rework simulation UI to modal and history sidebar | P0 | Codex | API-060, FE-035 | Added create modal for title, description, mahasiswa, departure point, and vehicle option; saved simulations can be listed, opened, and rendered from a dedicated sidebar. |
+| API-061 | Fix undefined function now() error in route simulation | P0 | Antigravity | API-056 | Replaced now() helper calls with Carbon::now() and imported Carbon in RouteSimulationRepository. |
+| API-062 | Add missing dibuat_pada column to visitasi_rute_detail | P0 | Antigravity | DB-003 | Updated normalization migration to add dibuat_pada column to visitasi_rute_detail and migrated. |
+| FE-037 | Hide route simulation buttons and sidebar access for mahasiswa | P0 | Antigravity | FE-036, API-062 | Hide route simulation UI elements and history sidebar from student (mahasiswa) user role on 3D map dashboard, and block corresponding endpoints in backend. |
+| FE-038 | Filter route simulations by creator user ID | P0 | Antigravity | FE-037 | Filter route simulation list and detail endpoints by the authenticated user ID from token header, so users only see their own simulations. |
+| FE-039 | Configure frontend development server port to 3001 | P0 | Antigravity | None | Set the devServer port to 3001 in nuxt.config.ts so the app always starts on port 3001 by default. |
+| API-063 | Add owner-scoped delete for route simulations | P0 | Codex | API-060, FE-038 | Added `DELETE /visitasi/simulasi-rute/{simulationId}` restricted to the authenticated owner/creator across `dibuat_oleh_user_id`, `dosen_user_id`, and legacy `dosen_id`. |
+| FE-040 | Add delete action in simulation history sidebar | P0 | Codex | API-063, FE-036 | Added detail-level `Hapus Simulasi` action with confirmation modal, API delete call, list refresh, and active route cleanup. |
+| API-064 | Close route simulations back to departure point | P0 | Codex | API-056 | Default simulation end point now returns to `titik_awal` when no explicit `titik_akhir` is provided, producing final leg back to start in OSRM geometry/legs. |
+| FE-041 | Mark return waypoint in simulation detail | P1 | Codex | API-064, FE-036 | Frontend now sends `kembali_ke_titik_awal=true` on create and labels the final `end` waypoint as `Kembali`. |
+| API-065 | Compare manual and optimized route candidates | P0 | Codex | API-064 | Simulation now computes OSRM `route` for input order and OSRM `trip` for optimized order, compares distance/duration with weighted score, and stores comparison metadata. |
+| FE-042 | Show route comparison metrics in simulation detail | P1 | Codex | API-065, FE-036 | Simulation detail now shows manual vs optimized distance, duration, score, saving, and recommended route label. |
+| FE-043 | Fix simulation route camera focus | P0 | Codex | FE-036 | Replaced route focus range based on OSRM geometry vertex count with route-bounds camera framing to avoid zooming out after create/detail load. |
+| FE-044 | Auto-redraw route when switching simulation detail | P0 | Codex | FE-036 | Detail switching now clears stale route entities before loading the next simulation, ignores stale detail responses, redraws the latest route automatically, and clears the active route when the sidebar closes. |
+| FE-045 | Hide wilayah distribution while simulation route is active | P1 | Codex | FE-036 | Active route mode now hides wilayah distribution markers/labels/arcs and region detail panels; clearing the route restores the distribution layer. |

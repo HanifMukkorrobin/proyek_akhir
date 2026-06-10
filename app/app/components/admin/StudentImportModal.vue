@@ -83,12 +83,13 @@
 
             <div class="overflow-hidden rounded-xl border border-outline-variant shadow-sm">
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[1180px] border-collapse text-left">
+                <table class="w-full min-w-[1260px] border-collapse text-left">
                   <thead>
                     <tr class="bg-surface-container-high text-xs font-bold uppercase text-on-surface-variant">
                       <th class="px-4 py-3">Import</th>
                       <th class="px-4 py-3">Row</th>
                       <th class="px-4 py-3">Nama</th>
+                      <th class="px-4 py-3">Angkatan</th>
                       <th class="px-4 py-3">Alamat</th>
                       <th class="px-4 py-3">Wilayah ID</th>
                       <th class="px-4 py-3">Confidence</th>
@@ -109,6 +110,7 @@
                       </td>
                       <td class="px-4 py-3 font-semibold">{{ row.baris }}</td>
                       <td class="px-4 py-3" :class="row.isImportable ? 'text-on-surface' : 'text-error'">{{ row.nama || '-' }}</td>
+                      <td class="px-4 py-3 font-mono text-xs">{{ row.angkatan || '-' }}</td>
                       <td class="max-w-sm px-4 py-3 text-on-surface-variant">
                         <p class="line-clamp-2">{{ row.alamat || '-' }}</p>
                       </td>
@@ -175,7 +177,7 @@ import { computed, ref } from 'vue'
 const emit = defineEmits(['close', 'imported'])
 const { $api } = useNuxtApp()
 
-const guidelines = ['Header wajib: nama, alamat', 'Template hanya memakai dua kolom', 'File utama: XLSX', 'Baris ambigu harus dikoreksi sebelum import']
+const guidelines = ['Header wajib: nama, alamat, angkatan', 'Kolom angkatan berisi tahun 4 digit', 'File utama: XLSX', 'Baris ambigu harus dikoreksi sebelum import']
 
 const fileInput = ref(null)
 const selectedFile = ref(null)
@@ -200,6 +202,7 @@ const previewRows = computed(() => {
       isImportable,
       nama: row.input?.nama || '',
       alamat: row.input?.alamat || '',
+      angkatan: row.input?.angkatan || '',
       wilayahId: classification.wilayah_id || '',
       isValidAddress: classification.is_valid_address ?? true,
       confidenceLabel: score === null || score === undefined ? '-' : `${Math.round(Number(score) * 100)}%`,

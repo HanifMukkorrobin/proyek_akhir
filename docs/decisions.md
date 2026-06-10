@@ -432,6 +432,62 @@
 - Impact: Same 223-row draft now scans to 105 importable, 90 empty-address rejects, and 28 non-empty review rows in under 1 second locally.
 - Follow-up: Fill missing addresses in the import file and add a managed alias table for remaining recurring local abbreviations.
 
+## DEC-055
+- Date: 2026-06-09
+- Context: Route simulation needs real routing output that includes route geometry, route legs, and turn-by-turn steps for later polyline rendering.
+- Decision: Use OSRM as the route provider for the MVP: `trip` service for optimized waypoint order and `route` service for fixed input order, both requested with `steps=true`, `geometries=geojson`, `overview=full`, and `annotations=duration,distance`.
+- Rationale: OSRM returns a complete route object with full geometry, legs, and step geometry while keeping the app contract provider-agnostic enough for later self-hosted OSRM or approved provider deployment.
+- Impact: Backend exposes `POST /visitasi/simulasi-rute`; frontend 3D map can draw OSRM GeoJSON geometry as a Cesium polyline and show distance, duration, legs, and steps summary.
+- Follow-up: Validate with approved dummy/seed coordinates, decide production OSRM host/provider, and add automated tests using mocked OSRM responses.
+
+## DEC-056
+- Date: 2026-06-09
+- Context: Route simulation needs to be created from a modal, saved, and reopened from a dedicated sidebar while preserving OSRM geometry, legs, and steps for map rendering.
+- Decision: Persist simulations as `visitasi_rencana` metadata plus participant, route, and route-detail records; expose saved list/detail endpoints, store `kendaraan` as app metadata mapped to OSRM profile at request time, and add compatibility columns for legacy local `visitasi_*` tables.
+- Rationale: Saved simulations become reusable without recalculating OSRM, while the frontend can render stored GeoJSON geometry and inspect ordered waypoints/legs from one detail response.
+- Impact: Backend exposes `GET /visitasi/simulasi-rute` and `GET /visitasi/simulasi-rute/{simulationId}` in addition to `POST`; frontend uses a create modal and a saved-simulation sidebar; existing local saved simulations remain readable.
+- Follow-up: Browser-test the full flow with approved dummy/seed locations and decide the production OSRM host/profile support.
+
+## DEC-057
+- Date: 2026-06-09
+- Context: Route simulation and visit history are only meant for academic administrators and lecturers (dosen), not student users (mahasiswa), but the corresponding UI controls and sidebar access were still visible to student sessions on the 3D map.
+- Decision: Hide route simulation buttons (Buat, Buat Simulasi, Pakai di Simulasi), simulation history sidebar controls, and the simulation sidebar panel itself from users logged in as "mahasiswa" in app/app/pages/dashboard/map.vue. Eagerly guard frontend openSimulationModal and openSimulationSidebar methods, and add 403 Forbidden checks in RouteSimulationController on the backend.
+- Rationale: Enforcing role-based access control prevents students from accessing or triggering administrator routing and history.
+- Impact: Student users can only use the 3D map for visual exploration and search, without access to simulation creation, sidebar menus, or corresponding backend endpoints.
+- Follow-up: None.
+
+## DEC-058
+- Date: 2026-06-09
+- Context: Saved simulation histories were previously visible to all lecturers/dosen globally, which caused simulations created by one lecturer account to be visible to others.
+- Decision: Add creator filtering based on the authenticated user ID (extracted from the Authorization token header) in both list and detail endpoints (GET /visitasi/simulasi-rute and GET /visitasi/simulasi-rute/{simulationId}). Filter database queries by the `dibuat_oleh_user_id` column.
+- Rationale: Multi-user simulation systems should isolate academic plans, ensuring each lecturer or administrator only views and accesses the simulations they created.
+- Impact: Dosen or admin accounts now only see their own simulations in the sidebar listing, and detail views are restricted to their own records.
+- Follow-up: None.
+
+## DEC-059
+- Date: 2026-06-10
+- Context: Users need to remove saved simulations, but deletion must not expose or alter simulations owned by other users.
+- Decision: Add owner-scoped soft delete through `DELETE /visitasi/simulasi-rute/{simulationId}` using authenticated ownership checks against `dibuat_oleh_user_id`, `dosen_user_id`, and legacy `dosen_id`; expose deletion from the simulation detail sidebar with a confirmation modal.
+- Rationale: Deletion should follow the same isolation boundary as list/detail access while preserving audit-friendly soft-delete behavior.
+- Impact: Users can delete only their own simulations; deleted simulations disappear from the sidebar and active route polyline is cleared when the open simulation is deleted.
+- Follow-up: Add automated API tests for owner delete, not-found, and cross-user denial cases.
+
+## DEC-060
+- Date: 2026-06-10
+- Context: Route simulations were stopping at the last selected mahasiswa, but the required visit path is departure point -> selected mahasiswa -> departure point.
+- Decision: Treat missing `titik_akhir` as an implicit return to `titik_awal`, keep OSRM `trip` with `source=first` and `destination=last`, and persist the return point as the final `end` waypoint.
+- Rationale: Closing the loop in the backend keeps API behavior correct for every caller and preserves optimized mahasiswa ordering while producing geometry, legs, and steps for the final return segment.
+- Impact: New simulations include the final leg back to departure in route distance, duration, GeoJSON geometry, legs, leg summaries, route details, and saved history.
+- Follow-up: Add automated OSRM response tests for closed-loop trip behavior using mocked or approved dummy coordinates.
+
+## DEC-061
+- Date: 2026-06-10
+- Context: Route effectiveness must compare both travel distance and travel time instead of relying only on one OSRM result.
+- Decision: For comparable simulations, calculate two candidates: OSRM `route` for the original input order and OSRM `trip` for optimized waypoint order. Score candidates with 70% duration weight and 30% distance weight, then use the lower score as the active route.
+- Rationale: Travel time is the primary operational cost for visitasi, while distance remains a secondary control to avoid inefficient detours.
+- Impact: Simulation responses and saved details now include `route_candidates`, `comparison`, distance/time savings, and a recommended route label.
+- Follow-up: Add automated tests with mocked OSRM responses for cases where optimized order is better, equal, or worse than input order.
+
 ## Entry Template
 - Date: YYYY-MM-DD
 - Context: <what triggered the decision>

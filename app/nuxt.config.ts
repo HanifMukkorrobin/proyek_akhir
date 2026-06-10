@@ -37,6 +37,9 @@ copyCesiumAssets()
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  devServer: {
+    port: 3001
+  },
   pages: true,
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt'],
   css: ['~/assets/css/tailwind.css'],

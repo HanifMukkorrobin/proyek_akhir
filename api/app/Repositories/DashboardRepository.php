@@ -14,16 +14,22 @@ class DashboardRepository
         'kabupaten' => 9,
     ];
 
-    public function getSummary(): array
+    public function getSummary(?int $angkatan = null): array
     {
-        $jumlahMahasiswa = Mahasiswa::query()->count();
-        $jumlahDataInvalid = Mahasiswa::query()->where('is_valid_address', false)->count();
+        $jumlahMahasiswaQuery = Mahasiswa::query();
+        $this->applyAngkatanFilter($jumlahMahasiswaQuery, $angkatan);
+        $jumlahMahasiswa = $jumlahMahasiswaQuery->count();
+
+        $jumlahDataInvalidQuery = Mahasiswa::query()->where('is_valid_address', false);
+        $this->applyAngkatanFilter($jumlahDataInvalidQuery, $angkatan);
+        $jumlahDataInvalid = $jumlahDataInvalidQuery->count();
+
         $jumlahUser = User::query()->count();
-        $jumlahProvinsiTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['provinsi']);
-        $jumlahKabupatenKotaTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['kabupaten']);
+        $jumlahProvinsiTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['provinsi'], $angkatan);
+        $jumlahKabupatenKotaTerjangkau = $this->countReachedRegions(self::GROUP_LENGTHS['kabupaten'], $angkatan);
         $totalProvinsi = $this->countRegionsByLength(self::GROUP_LENGTHS['provinsi']);
         $totalKabupatenKota = $this->countRegionsByLength(self::GROUP_LENGTHS['kabupaten']);
-        $topProvinceRows = $this->getDistributionRows('provinsi', 1);
+        $topProvinceRows = $this->getDistributionRows('provinsi', 1, $angkatan);
 
         return [
             'jumlah_mahasiswa' => $jumlahMahasiswa,
@@ -40,10 +46,12 @@ class DashboardRepository
         ];
     }
 
-    public function getChartData(string $groupBy, ?int $limit = null): array
+    public function getChartData(string $groupBy, ?int $limit = null, ?int $angkatan = null): array
     {
         $length = $this->getGroupLength($groupBy);
-        $rows = $this->getDistributionRows($groupBy, $limit);
+        $rows = $this->getDistributionRows($groupBy, $limit, $angkatan);
+        $totalMahasiswaQuery = Mahasiswa::query()->where('is_valid_address', true);
+        $this->applyAngkatanFilter($totalMahasiswaQuery, $angkatan);
 
         $categories = array_map(function (array $row) {
             return $row['nama_wilayah'];
@@ -55,8 +63,8 @@ class DashboardRepository
 
         return [
             'group_by' => $groupBy,
-            'total_mahasiswa' => Mahasiswa::query()->where('is_valid_address', true)->count(),
-            'total_wilayah_terjangkau' => $this->countReachedRegions($length),
+            'total_mahasiswa' => $totalMahasiswaQuery->count(),
+            'total_wilayah_terjangkau' => $this->countReachedRegions($length, $angkatan),
             'rows' => $rows,
             'categories' => $categories,
             'series' => [
@@ -68,7 +76,7 @@ class DashboardRepository
         ];
     }
 
-    public function getWilayahTree(string $parentId = '', string $rootLevel = 'root'): array
+    public function getWilayahTree(string $parentId = '', string $rootLevel = 'root', ?int $angkatan = null): array
     {
         $query = Wilayah::query()
             ->select([
@@ -91,12 +99,16 @@ class DashboardRepository
         }
 
         // Subquery for jumlah_mahasiswa
-        $query->selectSub(function ($q) {
+        $query->selectSub(function ($q) use ($angkatan) {
             $q->from('mahasiswa')
                 ->selectRaw('COUNT(mahasiswa_id)')
                 ->whereNull('dihapus_pada')
                 ->where('is_valid_address', true)
                 ->whereRaw('mahasiswa.wilayah_id LIKE wilayah.wilayah_id || \'%\'');
+
+            if ($angkatan !== null) {
+                $q->where('angkatan', $angkatan);
+            }
         }, 'jumlah_mahasiswa');
 
         $rows = $query->get()->toArray();
@@ -144,10 +156,12 @@ class DashboardRepository
         return substr($wilayahId, 0, strlen($wilayahId) - 3);
     }
 
-    private function getDistributionRows(string $groupBy, ?int $limit = null): array
+    private function getDistributionRows(string $groupBy, ?int $limit = null, ?int $angkatan = null): array
     {
         $length = $this->getGroupLength($groupBy);
-        $totalMahasiswa = Mahasiswa::query()->where('is_valid_address', true)->count();
+        $totalMahasiswaQuery = Mahasiswa::query()->where('is_valid_address', true);
+        $this->applyAngkatanFilter($totalMahasiswaQuery, $angkatan);
+        $totalMahasiswa = $totalMahasiswaQuery->count();
 
         $query = Mahasiswa::query()
             ->selectRaw("LEFT(mahasiswa.wilayah_id, {$length}) as kode_wilayah")
@@ -168,6 +182,8 @@ class DashboardRepository
             ->groupBy('w.wilayah_id', 'w.nama', 'w.kode_dukcapil', 'w.latitude', 'w.longitude')
             ->orderByDesc('jumlah')
             ->orderBy('w.nama');
+
+        $this->applyAngkatanFilter($query, $angkatan, 'mahasiswa.angkatan');
 
         if ($limit !== null) {
             $query->limit($limit);
@@ -202,14 +218,27 @@ class DashboardRepository
             ->toArray();
     }
 
-    private function countReachedRegions(int $length): int
+    private function countReachedRegions(int $length, ?int $angkatan = null): int
     {
-        return (int) Mahasiswa::query()
+        $query = Mahasiswa::query()
             ->whereNotNull('wilayah_id')
             ->where('is_valid_address', true)
-            ->whereRaw('char_length(wilayah_id) >= ?', [$length])
+            ->whereRaw('char_length(wilayah_id) >= ?', [$length]);
+
+        $this->applyAngkatanFilter($query, $angkatan);
+
+        return (int) $query
             ->selectRaw("COUNT(DISTINCT LEFT(wilayah_id, {$length})) as aggregate")
             ->value('aggregate');
+    }
+
+    private function applyAngkatanFilter($query, ?int $angkatan, string $column = 'angkatan'): void
+    {
+        if ($angkatan === null) {
+            return;
+        }
+
+        $query->where($column, $angkatan);
     }
 
     private function countRegionsByLength(int $length): int

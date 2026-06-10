@@ -52,6 +52,10 @@ $router->group(['middleware' => 'auth.token'], function () use ($router) {
     $router->get('/dashboard/map/wilayah-points', 'DashboardMapController@wilayahPoints');
     $router->get('/dashboard/map/wilayah/{wilayahId}/mahasiswa', 'DashboardMapController@mahasiswaByWilayah');
     $router->get('/dashboard/map/mahasiswa-search', 'DashboardMapController@searchMahasiswa');
+    $router->get('/visitasi/simulasi-rute', 'RouteSimulationController@index');
+    $router->get('/visitasi/simulasi-rute/{simulationId}', 'RouteSimulationController@show');
+    $router->post('/visitasi/simulasi-rute', 'RouteSimulationController@simulate');
+    $router->delete('/visitasi/simulasi-rute/{simulationId}', 'RouteSimulationController@destroy');
 
     $router->get('/mahasiswa', 'MahasiswaController@index');
     $router->post('/mahasiswa/import/scan', 'MahasiswaImportController@scan');

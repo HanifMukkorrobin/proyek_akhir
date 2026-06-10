@@ -63,8 +63,14 @@
       <div class="flex items-center justify-between gap-4">
         <div>
           <h1 class="text-base font-black text-emerald-950">3D Map Console</h1>
-          <p class="mt-1 text-body-sm text-slate-500">
+          <p
+            v-if="!hasActiveSimulationRoute"
+            class="mt-1 text-body-sm text-slate-500"
+          >
             {{ activeLevelLabel }} - {{ formatNumber(mapPoints.length) }} titik
+          </p>
+          <p v-else class="mt-1 text-body-sm text-slate-500">
+            Mode Simulasi Rute
           </p>
         </div>
         <button
@@ -75,46 +81,25 @@
           <Icon icon="solar:close-circle-bold-duotone" class="h-5 w-5" />
         </button>
       </div>
-      <!-- 
-      <div class="mt-6 grid grid-cols-2 gap-3">
-        <button
-          class="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-primary disabled:cursor-wait disabled:opacity-70"
-          type="button"
-          :disabled="isMapPointsLoading"
-          @click="refreshMapPoints"
-        >
-          <Icon :icon="isMapPointsLoading ? 'solar:refresh-bold-duotone' : 'solar:refresh-linear'" class="h-5 w-5" :class="{ 'animate-spin': isMapPointsLoading }" />
-          Refresh
-        </button>
-
-        <button
-          class="flex h-12 items-center justify-center gap-2 rounded-xl border border-outline-variant/40 px-3 text-sm font-bold text-slate-700 transition hover:bg-emerald-50"
-          type="button"
-          @click="flyToIndonesia"
-        >
-          <Icon icon="solar:map-arrow-square-bold-duotone" class="h-5 w-5 text-primary" />
-          Indonesia
-        </button>
-      </div>
- -->
-      <div
-        class="mt-6 rounded-xl border border-emerald-100 bg-surface-container-low p-4"
+      <label
+        class="mt-5 flex h-11 items-center gap-3 rounded-xl border border-emerald-100 bg-surface-container-low px-3"
       >
-        <p class="text-label-caps uppercase text-slate-500">Layer Aktif</p>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <span
-            class="rounded-full bg-primary px-3 py-1 text-xs font-bold text-on-primary"
-            >Wilayah</span
-          >
-          <span
-            class="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600"
-            >Mahasiswa</span
-          >
-          <span
-            class="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600"
-            >Arc Visitasi</span
-          >
-        </div>
+        <Icon icon="solar:calendar-date-bold-duotone" class="h-5 w-5 text-primary" />
+        <span class="text-xs font-black uppercase text-slate-500">Tahun</span>
+        <select
+          v-model="selectedMapAngkatan"
+          class="min-w-0 flex-1 border-none bg-transparent text-sm font-bold text-emerald-950 outline-none"
+        >
+          <option value="">Semua Tahun</option>
+          <option v-for="year in yearOptions" :key="year" :value="String(year)">
+            {{ year }}
+          </option>
+        </select>
+      </label>
+      <div
+        v-if="!hasActiveSimulationRoute"
+        class="mt-4 rounded-xl border border-emerald-100 bg-surface-container-low p-4"
+      >
         <p
           v-if="activeParentName"
           class="mt-3 truncate text-body-sm font-semibold text-emerald-900"
@@ -144,7 +129,7 @@
       </div>
 
       <div
-        v-if="selectedPoint"
+        v-if="selectedPoint && !hasActiveSimulationRoute"
         class="mt-4 flex min-h-0 flex-1 flex-col rounded-xl border border-emerald-100 bg-white p-4"
       >
         <div>
@@ -196,6 +181,16 @@
           >
             {{ selectedPoint.address || "Alamat belum tersedia." }}
           </div>
+
+          <button
+            v-if="selectedPoint.type === 'mahasiswa' && authStore.user?.role !== 'mahasiswa'"
+            class="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-100 text-sm font-bold text-primary transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            type="button"
+            @click="openSimulationModal({ student: selectedPoint })"
+          >
+            <Icon icon="solar:add-circle-bold-duotone" class="h-5 w-5" />
+            Pakai di Simulasi
+          </button>
         </div>
 
         <div
@@ -290,6 +285,28 @@
         @click="consoleOpen = !consoleOpen"
       >
         <Icon icon="solar:sidebar-code-bold-duotone" class="size-6" />
+      </button>
+    </div>
+
+    <div
+      v-if="authStore.user?.role !== 'mahasiswa'"
+      class="fixed right-4 top-44 z-30 flex max-w-[calc(100vw-2rem)] gap-2 sm:right-7 sm:top-48"
+    >
+      <button
+        class="flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-bold text-on-primary shadow-xl shadow-emerald-950/10 transition hover:bg-emerald-700"
+        type="button"
+        @click="openSimulationModal"
+      >
+        <Icon icon="solar:routing-2-bold-duotone" class="h-5 w-5" />
+        Buat Simulasi
+      </button>
+      <button
+        class="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/90 text-primary shadow-xl shadow-emerald-950/10 backdrop-blur-md transition hover:bg-white"
+        type="button"
+        aria-label="Buka riwayat simulasi"
+        @click="openSimulationSidebar"
+      >
+        <Icon icon="solar:list-check-bold-duotone" class="h-5 w-5" />
       </button>
     </div>
 
@@ -416,6 +433,680 @@
     </div>
 
     <div
+      v-if="simulationModalOpen"
+      class="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6"
+    >
+      <button
+        class="absolute inset-0 bg-forest-950/65 backdrop-blur-sm"
+        type="button"
+        aria-label="Tutup modal simulasi"
+        @click="closeSimulationModal"
+      />
+      <section
+        class="relative flex max-h-[calc(100vh-3rem)] w-[min(46rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl shadow-emerald-950/25"
+      >
+        <header
+          class="flex shrink-0 items-center justify-between gap-4 border-b border-emerald-100 px-5 py-4"
+        >
+          <div class="min-w-0">
+            <p class="text-label-caps uppercase text-slate-500">
+              Simulasi Rute
+            </p>
+            <h2 class="mt-1 truncate text-lg font-black text-emerald-950">
+              Buat Simulasi Visitasi
+            </h2>
+          </div>
+          <button
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-emerald-50"
+            type="button"
+            aria-label="Tutup modal simulasi"
+            @click="closeSimulationModal"
+          >
+            <Icon icon="solar:close-circle-bold-duotone" class="h-6 w-6" />
+          </button>
+        </header>
+
+        <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="saveRouteSimulation">
+          <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block sm:col-span-2">
+                <span class="text-xs font-black uppercase text-slate-500">
+                  Judul
+                </span>
+                <input
+                  v-model="simulationForm.namaRencana"
+                  class="mt-2 h-11 w-full rounded-lg border border-emerald-100 px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-emerald-100"
+                  maxlength="255"
+                  type="text"
+                  placeholder="Simulasi Visitasi"
+                />
+              </label>
+
+              <label class="block sm:col-span-2">
+                <span class="text-xs font-black uppercase text-slate-500">
+                  Deskripsi
+                </span>
+                <textarea
+                  v-model="simulationForm.deskripsi"
+                  class="mt-2 min-h-24 w-full resize-y rounded-lg border border-emerald-100 px-3 py-2 text-sm font-medium text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Catatan simulasi"
+                />
+              </label>
+            </div>
+
+            <section>
+              <p class="text-xs font-black uppercase text-slate-500">
+                Kendaraan
+              </p>
+              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <button
+                  v-for="vehicle in simulationVehicleOptions"
+                  :key="vehicle.value"
+                  class="flex h-11 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-bold transition"
+                  :class="
+                    simulationForm.kendaraan === vehicle.value
+                      ? 'border-primary bg-emerald-50 text-primary'
+                      : 'border-emerald-100 text-slate-600 hover:bg-emerald-50'
+                  "
+                  type="button"
+                  @click="simulationForm.kendaraan = vehicle.value"
+                >
+                  <Icon :icon="vehicle.icon" class="h-5 w-5" />
+                  {{ vehicle.label }}
+                </button>
+              </div>
+            </section>
+
+            <section>
+              <p class="text-xs font-black uppercase text-slate-500">
+                Titik Keberangkatan
+              </p>
+              <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                <button
+                  class="rounded-lg border px-3 py-3 text-left text-sm font-bold transition"
+                  :class="
+                    simulationForm.departureMode === 'hub'
+                      ? 'border-primary bg-emerald-50 text-primary'
+                      : 'border-emerald-100 text-slate-600 hover:bg-emerald-50'
+                  "
+                  type="button"
+                  @click="setDepartureMode('hub')"
+                >
+                  PENS Hub
+                </button>
+                <button
+                  class="rounded-lg border px-3 py-3 text-left text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  :class="
+                    simulationForm.departureMode === 'selected'
+                      ? 'border-primary bg-emerald-50 text-primary'
+                      : 'border-emerald-100 text-slate-600 hover:bg-emerald-50'
+                  "
+                  type="button"
+                  :disabled="!selectedDepartureCandidate"
+                  @click="setDepartureMode('selected')"
+                >
+                  Titik Dipilih
+                </button>
+                <button
+                  class="rounded-lg border px-3 py-3 text-left text-sm font-bold transition"
+                  :class="
+                    simulationForm.departureMode === 'custom'
+                      ? 'border-primary bg-emerald-50 text-primary'
+                      : 'border-emerald-100 text-slate-600 hover:bg-emerald-50'
+                  "
+                  type="button"
+                  @click="setDepartureMode('custom')"
+                >
+                  Manual
+                </button>
+              </div>
+
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                <label class="block sm:col-span-3">
+                  <span class="text-xs font-black uppercase text-slate-500">
+                    Nama Titik
+                  </span>
+                  <input
+                    v-model="simulationForm.titikAwalNama"
+                    class="mt-2 h-10 w-full rounded-lg border border-emerald-100 px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50"
+                    :disabled="simulationForm.departureMode !== 'custom'"
+                    type="text"
+                  />
+                </label>
+                <label class="block">
+                  <span class="text-xs font-black uppercase text-slate-500">
+                    Latitude
+                  </span>
+                  <input
+                    v-model.number="simulationForm.titikAwalLatitude"
+                    class="mt-2 h-10 w-full rounded-lg border border-emerald-100 px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50"
+                    :disabled="simulationForm.departureMode !== 'custom'"
+                    step="0.000001"
+                    type="number"
+                  />
+                </label>
+                <label class="block">
+                  <span class="text-xs font-black uppercase text-slate-500">
+                    Longitude
+                  </span>
+                  <input
+                    v-model.number="simulationForm.titikAwalLongitude"
+                    class="mt-2 h-10 w-full rounded-lg border border-emerald-100 px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50"
+                    :disabled="simulationForm.departureMode !== 'custom'"
+                    step="0.000001"
+                    type="number"
+                  />
+                </label>
+                <div class="flex items-end">
+                  <button
+                    class="h-10 w-full rounded-lg border border-emerald-100 px-3 text-sm font-bold text-primary transition hover:bg-emerald-50"
+                    type="button"
+                    @click="focusDeparturePoint"
+                  >
+                    Fokus
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-xs font-black uppercase text-slate-500">
+                  Mahasiswa
+                </p>
+                <span class="text-xs font-bold text-primary">
+                  {{ selectedRouteStudents.length }} dipilih
+                </span>
+              </div>
+              <div
+                class="mt-2 flex h-11 items-center rounded-lg border border-emerald-100 px-3"
+              >
+                <Icon
+                  icon="solar:magnifer-linear"
+                  class="mr-2 h-5 w-5 text-slate-400"
+                />
+                <input
+                  v-model="simulationSearchQuery"
+                  class="min-w-0 flex-1 border-none bg-transparent text-sm font-medium text-slate-800 outline-none"
+                  type="search"
+                  placeholder="Cari mahasiswa"
+                />
+                <Icon
+                  v-if="isSimulationSearching"
+                  icon="solar:refresh-bold-duotone"
+                  class="ml-2 h-5 w-5 animate-spin text-primary"
+                />
+              </div>
+
+              <div
+                v-if="simulationSearchQuery.trim().length >= 2"
+                class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-emerald-100"
+              >
+                <p
+                  v-if="simulationSearchError"
+                  class="px-3 py-3 text-sm font-semibold text-red-600"
+                >
+                  {{ simulationSearchError }}
+                </p>
+                <p
+                  v-else-if="!isSimulationSearching && simulationSearchResults.length === 0"
+                  class="px-3 py-3 text-sm font-semibold text-slate-500"
+                >
+                  Mahasiswa tidak ditemukan.
+                </p>
+                <button
+                  v-for="student in simulationSearchResults"
+                  :key="student.id"
+                  class="flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  :disabled="isStudentInRoute(student)"
+                  @click="addRouteStudent(student)"
+                >
+                  <span class="min-w-0">
+                    <span class="block truncate font-bold text-slate-800">
+                      {{ student.name }}
+                    </span>
+                    <span class="block truncate text-xs text-slate-500">
+                      {{ student.regionName || student.address }}
+                    </span>
+                  </span>
+                  <Icon
+                    :icon="
+                      isStudentInRoute(student)
+                        ? 'solar:check-circle-bold-duotone'
+                        : 'solar:add-circle-bold-duotone'
+                    "
+                    class="h-5 w-5 shrink-0 text-primary"
+                  />
+                </button>
+              </div>
+
+              <div
+                v-if="selectedRouteStudents.length > 0"
+                class="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1"
+              >
+                <div
+                  v-for="(student, index) in selectedRouteStudents"
+                  :key="student.mahasiswaId"
+                  class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"
+                >
+                  <span class="flex min-w-0 items-center gap-3">
+                    <span
+                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-primary"
+                    >
+                      {{ index + 1 }}
+                    </span>
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-bold text-slate-800">
+                        {{ student.name }}
+                      </span>
+                      <span class="block truncate text-xs text-slate-500">
+                        {{ student.regionName || student.address }}
+                      </span>
+                    </span>
+                  </span>
+                  <button
+                    class="shrink-0 rounded-md px-2 py-1 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                    type="button"
+                    @click="removeRouteStudent(student.mahasiswaId)"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <p
+              v-if="simulationError"
+              class="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"
+            >
+              {{ simulationError }}
+            </p>
+          </div>
+
+          <footer
+            class="flex shrink-0 flex-col-reverse gap-2 border-t border-emerald-100 px-5 py-4 sm:flex-row sm:justify-end"
+          >
+            <button
+              class="h-11 rounded-lg border border-emerald-100 px-4 text-sm font-bold text-slate-600 transition hover:bg-emerald-50"
+              type="button"
+              @click="resetSimulationDraft"
+            >
+              Reset
+            </button>
+            <button
+              class="h-11 rounded-lg bg-primary px-5 text-sm font-bold text-on-primary shadow-sm transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+              type="submit"
+              :disabled="isSimulatingRoute"
+            >
+              {{ isSimulatingRoute ? "Menghitung..." : "Simpan Simulasi" }}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
+    <aside
+      v-if="simulationSidebarOpen"
+      class="fixed bottom-5 right-4 top-24 z-[65] flex w-[min(52rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl shadow-emerald-950/20 sm:right-6 sm:top-32"
+    >
+      <header
+        class="flex shrink-0 items-center justify-between gap-4 border-b border-emerald-100 px-5 py-4"
+      >
+        <div class="min-w-0">
+          <p class="text-label-caps uppercase text-slate-500">
+            Riwayat Simulasi
+          </p>
+          <h2 class="mt-1 truncate text-lg font-black text-emerald-950">
+            Daftar dan Detail
+          </h2>
+        </div>
+        <button
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-emerald-50"
+          type="button"
+          aria-label="Tutup riwayat simulasi"
+          @click="closeSimulationSidebar"
+        >
+          <Icon icon="solar:close-circle-bold-duotone" class="h-6 w-6" />
+        </button>
+      </header>
+
+      <div class="grid min-h-0 flex-1 gap-0 md:grid-cols-[18rem_1fr]">
+        <section class="min-h-0 border-b border-emerald-100 md:border-b-0 md:border-r">
+          <div class="flex h-full min-h-0 flex-col">
+            <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+              <span class="text-xs font-black uppercase text-slate-500">
+                Simulasi
+              </span>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-full text-primary transition hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                :disabled="isSimulationListLoading"
+                @click="fetchSavedSimulations({ force: true })"
+              >
+                <Icon
+                  icon="solar:refresh-bold-duotone"
+                  class="h-5 w-5"
+                  :class="{ 'animate-spin': isSimulationListLoading }"
+                />
+              </button>
+            </div>
+
+            <div class="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
+              <div
+                v-if="isSimulationListLoading && savedSimulations.length === 0"
+                class="space-y-2"
+              >
+                <div
+                  v-for="index in 4"
+                  :key="index"
+                  class="h-20 animate-pulse rounded-lg bg-slate-100"
+                />
+              </div>
+              <p
+                v-else-if="savedSimulations.length === 0"
+                class="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm font-semibold text-slate-500"
+              >
+                Belum ada simulasi.
+              </p>
+              <button
+                v-for="simulation in savedSimulations"
+                :key="simulation.simulation_id"
+                class="w-full rounded-lg border px-3 py-3 text-left transition hover:bg-emerald-50"
+                :class="
+                  activeSimulationId === simulation.simulation_id
+                    ? 'border-primary bg-emerald-50'
+                    : 'border-slate-100 bg-white'
+                "
+                type="button"
+                @click="loadSimulationDetail(simulation.simulation_id)"
+              >
+                <span class="block truncate text-sm font-black text-emerald-950">
+                  {{ simulation.nama_rencana || simulation.judul }}
+                </span>
+                <span class="mt-1 block truncate text-xs text-slate-500">
+                  {{ formatDateTime(simulation.dibuat_pada) }} ·
+                  {{ formatVehicle(simulation.kendaraan) }}
+                </span>
+                <span class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <span class="rounded-md bg-slate-50 px-2 py-1 font-bold text-slate-700">
+                    {{ simulation.peserta_count || 0 }} tujuan
+                  </span>
+                  <span class="rounded-md bg-slate-50 px-2 py-1 font-bold text-slate-700">
+                    {{ formatDistance(simulation.route?.distance_meters) }}
+                  </span>
+                </span>
+              </button>
+
+              <button
+                v-if="canLoadMoreSavedSimulations"
+                class="h-10 w-full rounded-lg border border-emerald-100 text-sm font-bold text-primary transition hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                :disabled="isSimulationListLoading"
+                @click="loadMoreSavedSimulations"
+              >
+                Muat Lagi
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="min-h-0 overflow-y-auto px-5 py-4">
+          <div
+            v-if="isSimulationDetailLoading"
+            class="space-y-3"
+          >
+            <div class="h-8 animate-pulse rounded bg-slate-100" />
+            <div class="h-24 animate-pulse rounded bg-slate-100" />
+            <div class="h-40 animate-pulse rounded bg-slate-100" />
+          </div>
+
+          <div v-else-if="simulationResult" class="space-y-5">
+            <div>
+              <p class="text-xs font-black uppercase text-slate-500">
+                Detail Aktif
+              </p>
+              <h3 class="mt-1 text-xl font-black text-emerald-950">
+                {{ simulationResult.nama_rencana || simulationResult.judul || "Simulasi Visitasi" }}
+              </h3>
+              <p
+                v-if="simulationResult.deskripsi || simulationResult.catatan"
+                class="mt-2 text-sm font-medium text-slate-600"
+              >
+                {{ simulationResult.deskripsi || simulationResult.catatan }}
+              </p>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-sm">
+              <div class="rounded-lg bg-emerald-50 px-3 py-2">
+                <span class="block font-black text-emerald-950">
+                  {{ formatDistance(simulationResult.route?.distance_meters) }}
+                </span>
+                <span class="text-xs text-slate-500">Jarak</span>
+              </div>
+              <div class="rounded-lg bg-emerald-50 px-3 py-2">
+                <span class="block font-black text-emerald-950">
+                  {{ formatDuration(simulationResult.route?.duration_seconds) }}
+                </span>
+                <span class="text-xs text-slate-500">Durasi</span>
+              </div>
+              <div class="rounded-lg bg-slate-50 px-3 py-2">
+                <span class="block font-black text-slate-800">
+                  {{ formatVehicle(simulationResult.kendaraan) }}
+                </span>
+                <span class="text-xs text-slate-500">Kendaraan</span>
+              </div>
+              <!-- <div class="rounded-lg bg-slate-50 px-3 py-2">
+                <span class="block font-black text-slate-800">
+                  {{ simulationResult.route?.legs?.length || 0 }} / {{ simulationStepCount }}
+                </span>
+                <span class="text-xs text-slate-500">Legs / Steps</span>
+              </div> -->
+            </div>
+
+            <!-- <section
+              v-if="simulationResult.comparison"
+              class="rounded-lg border border-emerald-100 bg-white px-3 py-3"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs font-black uppercase text-slate-500">
+                  Perbandingan Jalur
+                </p>
+                <span class="rounded-md bg-emerald-50 px-2 py-1 text-xs font-black text-primary">
+                  {{ simulationResult.comparison.recommended_label }}
+                </span>
+              </div>
+
+              <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                <div class="rounded-lg bg-slate-50 px-3 py-3">
+                  <p class="text-xs font-black uppercase text-slate-500">
+                    Urutan Input
+                  </p>
+                  <p class="mt-1 text-sm font-black text-slate-800">
+                    {{ formatDistance(simulationResult.comparison.candidates?.manual?.distance_meters) }}
+                    ·
+                    {{ formatDuration(simulationResult.comparison.candidates?.manual?.duration_seconds) }}
+                  </p>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">
+                    Skor {{ formatRouteScore(simulationResult.comparison.candidates?.manual?.score) }}
+                  </p>
+                </div>
+
+                <div class="rounded-lg bg-emerald-50 px-3 py-3">
+                  <p class="text-xs font-black uppercase text-slate-500">
+                    Optimasi OSRM
+                  </p>
+                  <p class="mt-1 text-sm font-black text-emerald-950">
+                    {{ formatDistance(simulationResult.comparison.candidates?.optimized?.distance_meters) }}
+                    ·
+                    {{ formatDuration(simulationResult.comparison.candidates?.optimized?.duration_seconds) }}
+                  </p>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">
+                    Skor {{ formatRouteScore(simulationResult.comparison.candidates?.optimized?.score) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-3 grid gap-2 text-xs font-bold sm:grid-cols-2">
+                <span class="rounded-md bg-slate-50 px-2 py-2 text-slate-700">
+                  Jarak:
+                  {{ formatSaving(simulationResult.comparison.optimized_vs_manual?.distance_saving_meters, "distance") }}
+                </span>
+                <span class="rounded-md bg-slate-50 px-2 py-2 text-slate-700">
+                  Waktu:
+                  {{ formatSaving(simulationResult.comparison.optimized_vs_manual?.duration_saving_seconds, "duration") }}
+                </span>
+              </div>
+            </section> -->
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-on-primary transition hover:bg-emerald-700"
+                type="button"
+                @click="flyToSimulationRoute"
+              >
+                Fokus Jalur
+              </button>
+              <!-- <button
+                class="h-10 rounded-lg border border-red-100 px-4 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                type="button"
+                @click="clearSimulationRoute"
+              >
+                Hapus Jalur Aktif
+              </button> -->
+              <button
+                class="h-10 rounded-lg bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                :disabled="isDeletingSimulation"
+                @click="openDeleteSimulationModal(simulationResult)"
+              >
+                Hapus Simulasi
+              </button>
+            </div>
+
+            <section>
+              <p class="text-xs font-black uppercase text-slate-500">
+                Urutan Rute
+              </p>
+              <div class="mt-3 space-y-2">
+                <div
+                  v-for="waypoint in simulationResult.ordered_waypoints || []"
+                  :key="`${waypoint.order}-${waypoint.mahasiswa_id || waypoint.nama}`"
+                  class="flex gap-3 rounded-lg bg-slate-50 px-3 py-3"
+                >
+                  <span
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-primary"
+                  >
+                    {{ Number(waypoint.order || 0) + 1 }}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-black text-slate-800">
+                      {{ waypoint.nama }}
+                    </span>
+                    <span class="block truncate text-xs text-slate-500">
+                      {{ formatWaypointType(waypoint) }}
+                      <template v-if="waypoint.wilayah_nama">
+                        · {{ waypoint.wilayah_nama }}
+                      </template>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="simulationResult.route?.leg_summaries?.length">
+              <p class="text-xs font-black uppercase text-slate-500">
+                Detail Legs
+              </p>
+              <div class="mt-3 space-y-2">
+                <div
+                  v-for="leg in simulationResult.route.leg_summaries"
+                  :key="leg.leg_index"
+                  class="rounded-lg border border-slate-100 px-3 py-3"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <p class="min-w-0 text-sm font-black text-slate-800">
+                      <span class="truncate">
+                        {{ leg.from?.nama || "Titik awal" }} → {{ leg.to?.nama || "Tujuan" }}
+                      </span>
+                    </p>
+                    <span class="shrink-0 text-xs font-bold text-primary">
+                      {{ leg.steps_count || 0 }} steps
+                    </span>
+                  </div>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">
+                    {{ formatDistance(leg.distance_meters) }} ·
+                    {{ formatDuration(leg.duration_seconds) }}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <p
+            v-else
+            class="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm font-semibold text-slate-500"
+          >
+            Pilih simulasi dari daftar.
+          </p>
+        </section>
+      </div>
+    </aside>
+
+    <div
+      v-if="deleteSimulationTarget"
+      class="fixed inset-0 z-[75] flex items-center justify-center px-4 py-6"
+    >
+      <button
+        class="absolute inset-0 bg-forest-950/60 backdrop-blur-sm"
+        type="button"
+        aria-label="Tutup konfirmasi hapus simulasi"
+        @click="closeDeleteSimulationModal"
+      />
+      <section
+        class="relative w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-red-100 bg-white shadow-2xl shadow-red-950/20"
+      >
+        <header class="border-b border-red-100 px-5 py-4">
+          <p class="text-xs font-black uppercase text-red-500">
+            Hapus Simulasi
+          </p>
+          <h2 class="mt-1 text-lg font-black text-slate-950">
+            {{ deleteSimulationTarget.nama_rencana || deleteSimulationTarget.judul || "Simulasi Visitasi" }}
+          </h2>
+        </header>
+        <div class="space-y-3 px-5 py-4">
+          <p class="text-sm font-medium text-slate-600">
+            Simulasi ini akan dihapus dari daftar riwayat pengguna.
+          </p>
+          <p
+            v-if="deleteSimulationError"
+            class="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"
+          >
+            {{ deleteSimulationError }}
+          </p>
+        </div>
+        <footer class="flex justify-end gap-2 border-t border-red-100 px-5 py-4">
+          <button
+            class="h-10 rounded-lg border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+            type="button"
+            :disabled="isDeletingSimulation"
+            @click="closeDeleteSimulationModal"
+          >
+            Batal
+          </button>
+          <button
+            class="h-10 rounded-lg bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+            type="button"
+            :disabled="isDeletingSimulation"
+            @click="deleteSavedSimulation"
+          >
+            {{ isDeletingSimulation ? "Menghapus..." : "Hapus" }}
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
       v-if="mapError"
       class="fixed bottom-6 left-1/2 z-50 flex w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded-xl border border-error/20 bg-error-container px-4 py-3 text-body-sm text-on-error-container shadow-xl"
     >
@@ -456,6 +1147,44 @@ const VISITATION_HUB = {
   lon: 112.7947,
   count: 0,
 };
+const simulationVehicleOptions = [
+  {
+    value: "mobil",
+    label: "Mobil",
+    profile: "driving",
+    icon: "solar:car-bold-duotone",
+  },
+  {
+    value: "motor",
+    label: "Motor",
+    profile: "driving",
+    icon: "solar:scooter-bold-duotone",
+  },
+  {
+    value: "sepeda",
+    label: "Sepeda",
+    profile: "cycling",
+    icon: "solar:bicycling-bold-duotone",
+  },
+  {
+    value: "jalan_kaki",
+    label: "Jalan Kaki",
+    profile: "walking",
+    icon: "solar:walking-bold-duotone",
+  },
+];
+
+function createSimulationForm() {
+  return {
+    namaRencana: "",
+    deskripsi: "",
+    kendaraan: "mobil",
+    departureMode: "hub",
+    titikAwalNama: VISITATION_HUB.name,
+    titikAwalLatitude: VISITATION_HUB.lat,
+    titikAwalLongitude: VISITATION_HUB.lon,
+  };
+}
 
 const levelLabels = {
   provinsi: "Provinsi",
@@ -590,12 +1319,37 @@ const mapError = ref("");
 const searchQuery = ref("");
 const searchResults = ref([]);
 const searchError = ref("");
+const selectedMapAngkatan = ref("");
 const isSearching = ref(false);
 const isMapPointsLoading = ref(false);
 const isDetailLoading = ref(false);
+const isSimulatingRoute = ref(false);
+const isSimulationListLoading = ref(false);
+const isSimulationDetailLoading = ref(false);
+const isSimulationSearching = ref(false);
+const isDeletingSimulation = ref(false);
 const mapPoints = ref([]);
 const selectedPoint = ref(null);
 const selectedStudents = ref([]);
+const selectedRouteStudents = ref([]);
+const simulationResult = ref(null);
+const simulationError = ref("");
+const simulationModalOpen = ref(false);
+const simulationSidebarOpen = ref(false);
+const deleteSimulationTarget = ref(null);
+const deleteSimulationError = ref("");
+const simulationSearchQuery = ref("");
+const simulationSearchResults = ref([]);
+const simulationSearchError = ref("");
+const simulationForm = ref(createSimulationForm());
+const savedSimulations = ref([]);
+const activeSimulationId = ref(null);
+const savedSimulationPagination = ref({
+  halaman_sekarang: 1,
+  per_halaman: 10,
+  total_data: 0,
+  total_halaman: 1,
+});
 const studentPagination = ref({
   halaman_sekarang: 1,
   per_halaman: 8,
@@ -617,9 +1371,12 @@ let viewer = null;
 let clickHandler = null;
 let cameraMoveListener = null;
 let searchDebounceTimer = null;
+let simulationSearchDebounceTimer = null;
 let pointFetchTimer = null;
 let pointRequestSequence = 0;
 let searchRequestSequence = 0;
+let simulationSearchRequestSequence = 0;
+let simulationDetailRequestSequence = 0;
 let currentPointSignature = "";
 let mapPointCache = new Map();
 let regionPointCollection = null;
@@ -628,6 +1385,8 @@ let terrainProviderPromise = null;
 let terrainSampleSequence = 0;
 let terrainHeightCache = new Map();
 let isCameraTransitioning = false;
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: currentYear - 1998 }, (_, index) => currentYear + 1 - index);
 
 const userName = computed(
   () =>
@@ -765,6 +1524,43 @@ const canLoadMoreStudents = computed(() => {
   return selectedPoint.value?.type === "wilayah" && currentPage < totalPage;
 });
 
+const selectedDepartureCandidate = computed(() => {
+  const point = selectedPoint.value;
+
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+    return null;
+  }
+
+  return point;
+});
+
+const selectedSimulationVehicle = computed(() => {
+  return (
+    simulationVehicleOptions.find(
+      (vehicle) => vehicle.value === simulationForm.value.kendaraan,
+    ) || simulationVehicleOptions[0]
+  );
+});
+
+const canLoadMoreSavedSimulations = computed(() => {
+  const currentPage = Number(savedSimulationPagination.value.halaman_sekarang || 1);
+  const totalPage = Number(savedSimulationPagination.value.total_halaman || 1);
+  return currentPage < totalPage;
+});
+
+const simulationStepCount = computed(() => {
+  const legs = Array.isArray(simulationResult.value?.route?.legs)
+    ? simulationResult.value.route.legs
+    : [];
+  return legs.reduce((total, leg) => {
+    return total + (Array.isArray(leg?.steps) ? leg.steps.length : 0);
+  }, 0);
+});
+
+const hasActiveSimulationRoute = computed(() => {
+  return Boolean(simulationResult.value?.route?.geometry);
+});
+
 watch(searchQuery, (value) => {
   if (!import.meta.client) {
     return;
@@ -787,6 +1583,72 @@ watch(searchQuery, (value) => {
   searchDebounceTimer = window.setTimeout(() => {
     fetchStudentSearch(query);
   }, 350);
+});
+
+watch(simulationSearchQuery, (value) => {
+  if (!import.meta.client) {
+    return;
+  }
+
+  if (simulationSearchDebounceTimer) {
+    clearTimeout(simulationSearchDebounceTimer);
+  }
+
+  const query = value.trim();
+  simulationSearchError.value = "";
+
+  if (query.length < 2) {
+    simulationSearchResults.value = [];
+    return;
+  }
+
+  simulationSearchDebounceTimer = window.setTimeout(() => {
+    fetchSimulationStudentSearch(query);
+  }, 350);
+});
+
+watch(selectedMapAngkatan, () => {
+  if (!import.meta.client) {
+    return;
+  }
+
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+
+  if (simulationSearchDebounceTimer) {
+    clearTimeout(simulationSearchDebounceTimer);
+  }
+
+  pointRequestSequence += 1;
+  searchRequestSequence += 1;
+  simulationSearchRequestSequence += 1;
+  mapPointCache = new Map();
+  currentPointSignature = "";
+  searchQuery.value = "";
+  searchResults.value = [];
+  searchError.value = "";
+  simulationSearchQuery.value = "";
+  simulationSearchResults.value = [];
+  simulationSearchError.value = "";
+  selectedRouteStudents.value = [];
+  selectedPoint.value = null;
+  selectedStudents.value = [];
+  activeParentId.value = null;
+  activeParentName.value = "";
+  activeRegionSelection.value = null;
+  navigationStack.value = [];
+  studentPagination.value = createEmptyStudentPagination();
+  clearSimulationRoute();
+
+  if (viewer && Cesium) {
+    flyToIndonesia(0.65);
+  } else {
+    void fetchMapPoints("provinsi", {
+      force: true,
+      useBounds: false,
+    });
+  }
 });
 
 const levelLabel = (levelKey) => levelLabels[levelKey] || "Wilayah";
@@ -818,7 +1680,93 @@ const toggleTheme = () => {
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID").format(Number(value || 0));
 
+const formatDistance = (meters) => {
+  const value = Number(meters || 0);
+
+  if (value >= 1000) {
+    return `${new Intl.NumberFormat("id-ID", {
+      maximumFractionDigits: 1,
+    }).format(value / 1000)} km`;
+  }
+
+  return `${formatNumber(Math.round(value))} m`;
+};
+
+const formatDuration = (seconds) => {
+  const value = Number(seconds || 0);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.round((value % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours} jam ${minutes} mnt`;
+  }
+
+  return `${minutes} mnt`;
+};
+
+const formatRouteScore = (score) => {
+  const value = Number(score);
+  return Number.isFinite(value) ? value.toFixed(3) : "-";
+};
+
+const formatSaving = (value, type) => {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return "-";
+  }
+
+  if (Math.abs(numberValue) < 0.01) {
+    return "Sama";
+  }
+
+  const formatted =
+    type === "duration"
+      ? formatDuration(Math.abs(numberValue))
+      : formatDistance(Math.abs(numberValue));
+
+  return numberValue > 0 ? `Hemat ${formatted}` : `Lebih ${formatted}`;
+};
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
+
+const formatVehicle = (value) => {
+  const option = simulationVehicleOptions.find((vehicle) => vehicle.value === value);
+  return option?.label || "Mobil";
+};
+
+const formatWaypointType = (waypoint) => {
+  if (waypoint?.type === "mahasiswa") {
+    return "Tujuan";
+  }
+
+  if (waypoint?.type === "end") {
+    return "Kembali";
+  }
+
+  return "Berangkat";
+};
+
 const unwrapData = (response) => response?.data?.data ?? response?.data ?? {};
+
+const getAngkatanParams = () => {
+  return selectedMapAngkatan.value ? { angkatan: selectedMapAngkatan.value } : {};
+};
 
 const normalizeCoordinate = (value) => {
   const numberValue = Number(value);
@@ -869,6 +1817,7 @@ const normalizeStudentPoint = (row, index) => {
     mahasiswaId: row?.mahasiswa_id || "",
     name: row?.nama || `Mahasiswa ${index + 1}`,
     address: row?.alamat || "",
+    angkatan: row?.angkatan || null,
     wilayahId: row?.wilayah_id || row?.wilayah?.wilayah_id || "",
     regionName: row?.wilayah?.nama || "",
     lat,
@@ -917,6 +1866,7 @@ const fetchMapPoints = async (
   const params = {
     level,
     limit: performance.apiLimit,
+    ...getAngkatanParams(),
     ...bounds,
   };
 
@@ -1020,6 +1970,7 @@ const fetchStudentsByRegion = async (point, page = 1) => {
           page: studentPagination.value.halaman_sekarang,
           per_page: studentPagination.value.per_halaman,
           exclude_invalid: authStore.user?.role !== "admin",
+          ...getAngkatanParams(),
         },
       },
     );
@@ -1064,6 +2015,7 @@ const fetchStudentSearch = async (query) => {
         limit: SEARCH_RESULT_LIMIT,
         wilayah_id: activeParentId.value,
         exclude_invalid: authStore.user?.role !== "admin",
+        ...getAngkatanParams(),
       },
     });
     const payload = unwrapData(response);
@@ -1096,6 +2048,51 @@ const fetchStudentSearch = async (query) => {
   } finally {
     if (requestId === searchRequestSequence) {
       isSearching.value = false;
+    }
+  }
+};
+
+const fetchSimulationStudentSearch = async (query) => {
+  simulationSearchRequestSequence += 1;
+  const requestId = simulationSearchRequestSequence;
+  isSimulationSearching.value = true;
+  simulationSearchError.value = "";
+
+  try {
+    const response = await $api.get("/dashboard/map/mahasiswa-search", {
+      params: {
+        q: query,
+        limit: SEARCH_RESULT_LIMIT,
+        wilayah_id: activeParentId.value,
+        exclude_invalid: authStore.user?.role !== "admin",
+        ...getAngkatanParams(),
+      },
+    });
+    const payload = unwrapData(response);
+    const rows = Array.isArray(payload.results) ? payload.results : [];
+
+    if (requestId !== simulationSearchRequestSequence) {
+      return;
+    }
+
+    simulationSearchResults.value = rows
+      .map(normalizeStudentPoint)
+      .filter(
+        (point) => Number.isFinite(point.lat) && Number.isFinite(point.lon),
+      );
+  } catch (error) {
+    if (requestId !== simulationSearchRequestSequence) {
+      return;
+    }
+
+    simulationSearchError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal mencari mahasiswa.";
+    simulationSearchResults.value = [];
+  } finally {
+    if (requestId === simulationSearchRequestSequence) {
+      isSimulationSearching.value = false;
     }
   }
 };
@@ -1335,8 +2332,11 @@ const addMapEntities = () => {
     viewer.entities.removeAll();
     clearPrimitiveCollections();
     addHubEntity();
-    addRegionEntities();
+    if (!hasActiveSimulationRoute.value) {
+      addRegionEntities();
+    }
     addSearchEntities();
+    addSimulationRouteEntity();
   } finally {
     viewer.entities.resumeEvents();
     requestSceneRender();
@@ -1491,6 +2491,152 @@ const addSearchEntities = () => {
       },
     });
   }
+};
+
+const addSimulationRouteEntity = () => {
+  const coordinates = getSimulationRouteCoordinates();
+
+  if (coordinates.length < 2) {
+    return;
+  }
+
+  viewer.entities.add({
+    id: "osrm-simulation-route",
+    polyline: {
+      positions: coordinates.map(([longitude, latitude]) =>
+        Cesium.Cartesian3.fromDegrees(longitude, latitude, 120),
+      ),
+      width: 6,
+      material: Cesium.Color.fromCssColorString("#f59e0b").withAlpha(0.9),
+      clampToGround: true,
+    },
+  });
+
+  const orderedWaypoints = Array.isArray(simulationResult.value?.ordered_waypoints)
+    ? simulationResult.value.ordered_waypoints
+    : [];
+
+  orderedWaypoints.forEach((waypoint, index) => {
+    const latitude = normalizeCoordinate(waypoint.latitude);
+    const longitude = normalizeCoordinate(waypoint.longitude);
+
+    if (latitude === null || longitude === null) {
+      return;
+    }
+
+    viewer.entities.add({
+      id: `osrm-route-waypoint-${index}`,
+      name: waypoint.nama,
+      position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 180),
+      point: {
+        pixelSize: waypoint.type === "mahasiswa" ? 11 : 14,
+        color:
+          waypoint.type === "mahasiswa"
+            ? Cesium.Color.fromCssColorString("#f59e0b")
+            : Cesium.Color.fromCssColorString("#22c55e"),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: `${index + 1}`,
+        font: "800 12px Inter, sans-serif",
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.fromCssColorString("#78350f"),
+        outlineWidth: 4,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -28),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+  });
+};
+
+const removeSimulationRouteEntities = () => {
+  if (!viewer) {
+    return;
+  }
+
+  const routeEntities = Array.from(viewer.entities.values || []).filter((entity) => {
+    const id = String(entity.id || "");
+    return id === "osrm-simulation-route" || id.startsWith("osrm-route-waypoint-");
+  });
+
+  routeEntities.forEach((entity) => {
+    viewer.entities.remove(entity);
+  });
+};
+
+const getSimulationRouteCoordinates = () => {
+  const coordinates = simulationResult.value?.route?.geometry?.coordinates;
+
+  if (!Array.isArray(coordinates)) {
+    return [];
+  }
+
+  return coordinates
+    .map((pair) => {
+      if (!Array.isArray(pair) || pair.length < 2) {
+        return null;
+      }
+
+      const longitude = normalizeCoordinate(pair[0]);
+      const latitude = normalizeCoordinate(pair[1]);
+
+      if (longitude === null || latitude === null) {
+        return null;
+      }
+
+      return [longitude, latitude];
+    })
+    .filter(Boolean);
+};
+
+const calculateRouteCameraView = (coordinates) => {
+  const bounds = coordinates.reduce(
+    (result, [longitude, latitude]) => ({
+      minLon: Math.min(result.minLon, longitude),
+      maxLon: Math.max(result.maxLon, longitude),
+      minLat: Math.min(result.minLat, latitude),
+      maxLat: Math.max(result.maxLat, latitude),
+    }),
+    {
+      minLon: Number.POSITIVE_INFINITY,
+      maxLon: Number.NEGATIVE_INFINITY,
+      minLat: Number.POSITIVE_INFINITY,
+      maxLat: Number.NEGATIVE_INFINITY,
+    },
+  );
+
+  if (
+    !Number.isFinite(bounds.minLon) ||
+    !Number.isFinite(bounds.maxLon) ||
+    !Number.isFinite(bounds.minLat) ||
+    !Number.isFinite(bounds.maxLat)
+  ) {
+    return null;
+  }
+
+  const centerLon = (bounds.minLon + bounds.maxLon) / 2;
+  const centerLat = (bounds.minLat + bounds.maxLat) / 2;
+  const latSpanMeters = Math.max(0, bounds.maxLat - bounds.minLat) * 110574;
+  const lonSpanMeters =
+    Math.max(0, bounds.maxLon - bounds.minLon) *
+    111320 *
+    Math.max(0.2, Math.cos((centerLat * Math.PI) / 180));
+  const diagonalMeters = Math.sqrt(
+    latSpanMeters * latSpanMeters + lonSpanMeters * lonSpanMeters,
+  );
+  const height = Math.min(
+    levelFlyHeights.provinsi,
+    Math.max(POINT_FOCUS_HEIGHT.mahasiswa, diagonalMeters * 1.35),
+  );
+
+  return {
+    longitude: centerLon,
+    latitude: centerLat,
+    height,
+  };
 };
 
 const studentMarkerDataUrl = ref("");
@@ -1779,6 +2925,423 @@ const focusSearchResult = () => {
   }
 };
 
+const isStudentInRoute = (point) => {
+  if (!point?.mahasiswaId) {
+    return false;
+  }
+
+  return selectedRouteStudents.value.some(
+    (student) => student.mahasiswaId === point.mahasiswaId,
+  );
+};
+
+const normalizeRouteStudent = (point) => ({
+  mahasiswaId: point.mahasiswaId,
+  name: point.name,
+  address: point.address,
+  regionName: point.regionName,
+  angkatan: point.angkatan,
+  lat: point.lat,
+  lon: point.lon,
+});
+
+const addRouteStudent = (point) => {
+  if (!point?.mahasiswaId || isStudentInRoute(point)) {
+    return;
+  }
+
+  selectedRouteStudents.value = [
+    ...selectedRouteStudents.value,
+    normalizeRouteStudent(point),
+  ];
+  simulationError.value = "";
+};
+
+const removeRouteStudent = (mahasiswaId) => {
+  selectedRouteStudents.value = selectedRouteStudents.value.filter(
+    (student) => student.mahasiswaId !== mahasiswaId,
+  );
+
+  if (selectedRouteStudents.value.length === 0) {
+    simulationResult.value = null;
+    activeSimulationId.value = null;
+    addMapEntities();
+  }
+};
+
+const clearSimulationRoute = () => {
+  simulationDetailRequestSequence += 1;
+  simulationResult.value = null;
+  activeSimulationId.value = null;
+  isSimulationDetailLoading.value = false;
+  simulationError.value = "";
+  addMapEntities();
+};
+
+const resetSimulationDraft = () => {
+  selectedRouteStudents.value = [];
+  simulationForm.value = createSimulationForm();
+  simulationSearchQuery.value = "";
+  simulationSearchResults.value = [];
+  simulationSearchError.value = "";
+  simulationError.value = "";
+};
+
+const openSimulationModal = (options = {}) => {
+  if (authStore.user?.role === 'mahasiswa') return;
+  simulationModalOpen.value = true;
+  simulationError.value = "";
+
+  if (!simulationForm.value.namaRencana) {
+    simulationForm.value.namaRencana = `Simulasi Visitasi ${new Intl.DateTimeFormat(
+      "id-ID",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      },
+    ).format(new Date())}`;
+  }
+
+  if (options.student) {
+    addRouteStudent(options.student);
+  }
+};
+
+const closeSimulationModal = () => {
+  simulationModalOpen.value = false;
+};
+
+const openSimulationSidebar = async () => {
+  if (authStore.user?.role === 'mahasiswa') return;
+  simulationSidebarOpen.value = true;
+  await fetchSavedSimulations();
+};
+
+const closeSimulationSidebar = () => {
+  simulationSidebarOpen.value = false;
+  clearSimulationRoute();
+};
+
+const setDepartureMode = (mode) => {
+  simulationForm.value.departureMode = mode;
+
+  if (mode === "hub") {
+    simulationForm.value.titikAwalNama = VISITATION_HUB.name;
+    simulationForm.value.titikAwalLatitude = VISITATION_HUB.lat;
+    simulationForm.value.titikAwalLongitude = VISITATION_HUB.lon;
+    return;
+  }
+
+  if (mode === "selected" && selectedDepartureCandidate.value) {
+    simulationForm.value.titikAwalNama = selectedDepartureCandidate.value.name;
+    simulationForm.value.titikAwalLatitude = selectedDepartureCandidate.value.lat;
+    simulationForm.value.titikAwalLongitude = selectedDepartureCandidate.value.lon;
+    return;
+  }
+
+  if (mode === "custom" && !simulationForm.value.titikAwalNama) {
+    simulationForm.value.titikAwalNama = "Titik Keberangkatan";
+  }
+};
+
+const resolveSimulationDeparture = () => {
+  const latitude = normalizeCoordinate(simulationForm.value.titikAwalLatitude);
+  const longitude = normalizeCoordinate(simulationForm.value.titikAwalLongitude);
+  const name = String(simulationForm.value.titikAwalNama || "").trim();
+
+  if (latitude === null || latitude < -90 || latitude > 90) {
+    throw new Error("Latitude titik keberangkatan tidak valid.");
+  }
+
+  if (longitude === null || longitude < -180 || longitude > 180) {
+    throw new Error("Longitude titik keberangkatan tidak valid.");
+  }
+
+  return {
+    nama: name || "Titik Keberangkatan",
+    latitude,
+    longitude,
+  };
+};
+
+const focusDeparturePoint = () => {
+  if (!viewer || !Cesium) {
+    return;
+  }
+
+  try {
+    const point = resolveSimulationDeparture();
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude,
+        POINT_FOCUS_HEIGHT.mahasiswa,
+      ),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-78),
+        roll: 0,
+      },
+      duration: 0.75,
+    });
+  } catch (error) {
+    simulationError.value = error?.message || "Titik keberangkatan tidak valid.";
+  }
+};
+
+const fetchSavedSimulations = async (options = {}) => {
+  if (!options.force && savedSimulations.value.length > 0) {
+    return;
+  }
+
+  isSimulationListLoading.value = true;
+
+  try {
+    const response = await $api.get("/visitasi/simulasi-rute", {
+      params: {
+        page: 1,
+        per_page: savedSimulationPagination.value.per_halaman,
+      },
+    });
+    const payload = unwrapData(response);
+
+    savedSimulations.value = Array.isArray(payload.data) ? payload.data : [];
+    savedSimulationPagination.value = {
+      halaman_sekarang: payload.halaman_sekarang || 1,
+      per_halaman: payload.per_halaman || 10,
+      total_data: payload.total_data || savedSimulations.value.length,
+      total_halaman: payload.total_halaman || 1,
+    };
+  } catch (error) {
+    simulationError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal memuat daftar simulasi.";
+  } finally {
+    isSimulationListLoading.value = false;
+  }
+};
+
+const loadMoreSavedSimulations = async () => {
+  if (!canLoadMoreSavedSimulations.value) {
+    return;
+  }
+
+  isSimulationListLoading.value = true;
+  const nextPage = Number(savedSimulationPagination.value.halaman_sekarang || 1) + 1;
+
+  try {
+    const response = await $api.get("/visitasi/simulasi-rute", {
+      params: {
+        page: nextPage,
+        per_page: savedSimulationPagination.value.per_halaman,
+      },
+    });
+    const payload = unwrapData(response);
+    const rows = Array.isArray(payload.data) ? payload.data : [];
+
+    savedSimulations.value = [...savedSimulations.value, ...rows];
+    savedSimulationPagination.value = {
+      halaman_sekarang: payload.halaman_sekarang || nextPage,
+      per_halaman: payload.per_halaman || 10,
+      total_data: payload.total_data || savedSimulations.value.length,
+      total_halaman: payload.total_halaman || nextPage,
+    };
+  } catch (error) {
+    simulationError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal memuat daftar simulasi.";
+  } finally {
+    isSimulationListLoading.value = false;
+  }
+};
+
+const loadSimulationDetail = async (simulationId) => {
+  if (!simulationId) {
+    return;
+  }
+
+  simulationDetailRequestSequence += 1;
+  const requestId = simulationDetailRequestSequence;
+  simulationResult.value = null;
+  activeSimulationId.value = simulationId;
+  isSimulationDetailLoading.value = true;
+  simulationError.value = "";
+  removeSimulationRouteEntities();
+  requestSceneRender();
+
+  try {
+    const response = await $api.get(`/visitasi/simulasi-rute/${simulationId}`);
+
+    if (requestId !== simulationDetailRequestSequence) {
+      return;
+    }
+
+    simulationResult.value = unwrapData(response);
+    addMapEntities();
+    flyToSimulationRoute();
+  } catch (error) {
+    if (requestId !== simulationDetailRequestSequence) {
+      return;
+    }
+
+    activeSimulationId.value = null;
+    simulationError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal memuat detail simulasi.";
+  } finally {
+    if (requestId === simulationDetailRequestSequence) {
+      isSimulationDetailLoading.value = false;
+    }
+  }
+};
+
+const openDeleteSimulationModal = (simulation) => {
+  if (!simulation?.simulation_id) {
+    return;
+  }
+
+  deleteSimulationTarget.value = {
+    simulation_id: simulation.simulation_id,
+    nama_rencana: simulation.nama_rencana,
+    judul: simulation.judul,
+  };
+  deleteSimulationError.value = "";
+};
+
+const closeDeleteSimulationModal = () => {
+  if (isDeletingSimulation.value) {
+    return;
+  }
+
+  deleteSimulationTarget.value = null;
+  deleteSimulationError.value = "";
+};
+
+const deleteSavedSimulation = async () => {
+  const target = deleteSimulationTarget.value;
+
+  if (!target?.simulation_id) {
+    return;
+  }
+
+  isDeletingSimulation.value = true;
+  deleteSimulationError.value = "";
+
+  try {
+    await $api.delete(`/visitasi/simulasi-rute/${target.simulation_id}`);
+    savedSimulations.value = savedSimulations.value.filter(
+      (simulation) => simulation.simulation_id !== target.simulation_id,
+    );
+
+    if (activeSimulationId.value === target.simulation_id) {
+      clearSimulationRoute();
+    }
+
+    deleteSimulationTarget.value = null;
+    await fetchSavedSimulations({ force: true });
+  } catch (error) {
+    deleteSimulationError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal menghapus simulasi.";
+  } finally {
+    isDeletingSimulation.value = false;
+  }
+};
+
+const saveRouteSimulation = async () => {
+  if (selectedRouteStudents.value.length === 0) {
+    simulationError.value = "Pilih minimal satu mahasiswa tujuan.";
+    return;
+  }
+
+  isSimulatingRoute.value = true;
+  simulationError.value = "";
+
+  try {
+    const departure = resolveSimulationDeparture();
+    const response = await $api.post("/visitasi/simulasi-rute", {
+      nama_rencana: simulationForm.value.namaRencana,
+      judul: simulationForm.value.namaRencana,
+      deskripsi: simulationForm.value.deskripsi,
+      catatan: simulationForm.value.deskripsi,
+      kendaraan: simulationForm.value.kendaraan,
+      titik_awal: departure,
+      mahasiswa_ids: selectedRouteStudents.value.map(
+        (student) => student.mahasiswaId,
+      ),
+      profile: selectedSimulationVehicle.value.profile,
+      service: "trip",
+      optimize_order: true,
+      kembali_ke_titik_awal: true,
+      bandingkan_jalur: true,
+      simpan: true,
+    });
+
+    simulationResult.value = unwrapData(response);
+    activeSimulationId.value = simulationResult.value?.simulation_id || null;
+    simulationModalOpen.value = false;
+    simulationSidebarOpen.value = true;
+    await fetchSavedSimulations({ force: true });
+    resetSimulationDraft();
+    addMapEntities();
+    flyToSimulationRoute();
+  } catch (error) {
+    simulationError.value =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Gagal menghitung simulasi rute OSRM.";
+  } finally {
+    isSimulatingRoute.value = false;
+  }
+};
+
+const flyToSimulationRoute = () => {
+  if (!viewer || !Cesium) {
+    return;
+  }
+
+  const coordinates = getSimulationRouteCoordinates();
+
+  if (coordinates.length < 2) {
+    return;
+  }
+
+  const cameraView = calculateRouteCameraView(coordinates);
+
+  if (!cameraView) {
+    return;
+  }
+
+  viewer.camera.cancelFlight();
+  isCameraTransitioning = true;
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(
+      cameraView.longitude,
+      cameraView.latitude,
+      cameraView.height,
+    ),
+    orientation: {
+      heading: Cesium.Math.toRadians(0),
+      pitch: Cesium.Math.toRadians(-86),
+      roll: 0,
+    },
+    duration: 0.85,
+    complete: () => {
+      isCameraTransitioning = false;
+      updateCurrentCoordinate();
+      requestSceneRender();
+    },
+    cancel: () => {
+      isCameraTransitioning = false;
+      requestSceneRender();
+    },
+  });
+};
+
 const refreshMapPoints = () => {
   fetchMapPoints(activeLevelKey.value, {
     parentId: activeParentId.value,
@@ -1938,7 +3501,7 @@ const buildPointSignature = (levelKey, parentId, bounds) => {
     .map((key) => `${key}:${Number(bounds[key]).toFixed(1)}`)
     .join(",");
 
-  return `${levelKey}|${parentId || ""}|${roundedBounds}`;
+  return `${levelKey}|${parentId || ""}|${selectedMapAngkatan.value || ""}|${roundedBounds}`;
 };
 
 const getLevelPerformance = (levelKey) =>
@@ -2173,6 +3736,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer);
+  }
+
+  if (simulationSearchDebounceTimer) {
+    clearTimeout(simulationSearchDebounceTimer);
   }
 
   if (pointFetchTimer) {

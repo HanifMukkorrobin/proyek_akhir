@@ -35,6 +35,19 @@
           </label>
 
           <label class="block">
+            <span class="text-label-caps uppercase text-on-surface-variant">Angkatan</span>
+            <select
+              v-model.number="form.angkatan"
+              class="mt-2 h-12 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 text-body-sm text-on-surface outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              required
+            >
+              <option v-for="year in yearOptions" :key="year" :value="year">
+                {{ year }}
+              </option>
+            </select>
+          </label>
+
+          <label class="block">
             <span class="text-label-caps uppercase text-on-surface-variant">Alamat Domisili</span>
             <textarea
               v-model="form.alamat"
@@ -92,6 +105,7 @@ const { $api } = useNuxtApp()
 const form = reactive({
   nama: '',
   alamat: '',
+  angkatan: new Date().getFullYear(),
   use_external_geocoding: false
 })
 
@@ -103,10 +117,13 @@ const isCreate = computed(() => props.mode === 'create')
 const title = computed(() => isCreate.value ? 'Tambah Mahasiswa' : 'Ubah Mahasiswa')
 const description = computed(() => isCreate.value ? 'Simpan data mahasiswa dan klasifikasikan alamatnya.' : 'Perbarui nama atau alamat, lalu API akan menghitung ulang wilayah/koordinat.')
 const submitLabel = computed(() => isCreate.value ? 'Tambah Mahasiswa' : 'Simpan Perubahan')
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: currentYear - 1998 }, (_, index) => currentYear + 1 - index)
 
 const resetForm = () => {
   form.nama = props.mahasiswa?.nama || ''
   form.alamat = props.mahasiswa?.alamat || ''
+  form.angkatan = Number(props.mahasiswa?.angkatan || currentYear)
   form.use_external_geocoding = false
   errorMessage.value = ''
   successMessage.value = ''
@@ -145,12 +162,17 @@ const validateForm = () => {
     return 'Alamat domisili wajib diisi.'
   }
 
+  if (!yearOptions.includes(Number(form.angkatan))) {
+    return 'Angkatan wajib dipilih.'
+  }
+
   return ''
 }
 
 const buildPayload = () => ({
   nama: trimOrNull(form.nama),
   alamat: trimOrNull(form.alamat),
+  angkatan: Number(form.angkatan),
   use_external_geocoding: form.use_external_geocoding
 })
 

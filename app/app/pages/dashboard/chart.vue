@@ -80,7 +80,19 @@
           </p>
         </div>
 
-        <div class="order-1 flex justify-start lg:order-2 lg:justify-end">
+        <div class="order-1 flex flex-col gap-3 sm:flex-row sm:items-center lg:order-2 lg:justify-end">
+          <label class="flex h-12 items-center gap-3 rounded-xl border border-outline-variant bg-slate-50 px-4 shadow-panel dark:border-emerald-800 dark:bg-forest-900">
+            <Icon icon="solar:calendar-date-bold-duotone" class="h-5 w-5 text-primary" />
+            <select
+              v-model="selectedAngkatan"
+              class="min-w-32 border-none bg-transparent text-body-sm font-bold text-slate-700 outline-none dark:text-emerald-50"
+            >
+              <option value="">Semua Tahun</option>
+              <option v-for="year in yearOptions" :key="year" :value="String(year)">
+                {{ year }}
+              </option>
+            </select>
+          </label>
           <div
             class="flex items-center rounded-full border border-outline-variant bg-slate-50 p-1 shadow-panel dark:border-emerald-800 dark:bg-forest-900"
           >
@@ -442,7 +454,7 @@
 
 <script setup>
 import { Icon } from "@iconify/vue";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "~/stores/auth";
 
@@ -460,6 +472,7 @@ const isLoading = ref(false);
 const errorMessage = ref("");
 const chartGroupBy = ref("provinsi");
 const regionSearch = ref("");
+const selectedAngkatan = ref("");
 
 const summary = ref({
   jumlah_mahasiswa: 0,
@@ -495,6 +508,8 @@ const chartGroupOptions = [
   { label: "Provinsi", value: "provinsi" },
   { label: "Kab/Kota", value: "kabupaten" },
 ];
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: currentYear - 1998 }, (_, index) => currentYear + 1 - index);
 
 const userName = computed(
   () =>
@@ -710,6 +725,10 @@ const barColor = (index) => {
   return `rgba(0, 107, 38, ${opacity})`;
 };
 
+const getAngkatanParams = () => {
+  return selectedAngkatan.value ? { angkatan: selectedAngkatan.value } : {};
+};
+
 const flattenRows = (rows, depth) => {
   return rows.flatMap((row) => {
     const current = { ...row, depth };
@@ -744,7 +763,9 @@ const setLoadingNode = (wilayahId, value) => {
 };
 
 const fetchSummary = async () => {
-  const response = await $api.get("/dashboard/summary");
+  const response = await $api.get("/dashboard/summary", {
+    params: getAngkatanParams(),
+  });
   summary.value = normalizeSummary(response.data?.data);
 };
 
@@ -753,6 +774,7 @@ const fetchChart = async (groupBy) => {
     params: {
       group_by: groupBy,
       limit: 5,
+      ...getAngkatanParams(),
     },
   });
 
@@ -769,6 +791,7 @@ const fetchWilayahChildren = async (parentId) => {
     const response = await $api.get("/dashboard/wilayah-tree", {
       params: {
         parent_id: parentId,
+        ...getAngkatanParams(),
       },
     });
 
@@ -785,6 +808,7 @@ const fetchRootWilayah = async () => {
   const response = await $api.get("/dashboard/wilayah-tree", {
     params: {
       root_level: "provinsi",
+      ...getAngkatanParams(),
     },
   });
   const rows = normalizeWilayahRows(response.data?.data);
@@ -849,6 +873,14 @@ const loadDashboard = async () => {
 
   isLoading.value = false;
 };
+
+watch(selectedAngkatan, () => {
+  if (!authStore.isAuthenticated) {
+    return;
+  }
+
+  loadDashboard();
+});
 
 const handleLogout = () => {
   authStore.logout();

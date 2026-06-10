@@ -31,6 +31,7 @@ class Mahasiswa extends Model
         'longitude',
         'wilayah_id',
         'alamat',
+        'angkatan',
         'is_valid_address',
         'geocoding_status',
         'dibuat_oleh_user_id',
@@ -39,6 +40,7 @@ class Mahasiswa extends Model
     ];
 
     protected $casts = [
+        'angkatan' => 'integer',
         'is_valid_address' => 'boolean',
     ];
 

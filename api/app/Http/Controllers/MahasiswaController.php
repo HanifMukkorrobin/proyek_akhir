@@ -39,6 +39,7 @@ class MahasiswaController extends Controller
         $validator = Validator::make($payload, [
             'nama' => 'required|string|max:255',
             'alamat' => 'nullable|string',
+            'angkatan' => 'required|integer|min:2000|max:' . ((int) date('Y') + 1),
             'dibuat_oleh_user_id' => 'nullable|integer',
             'diubah_oleh_user_id' => 'nullable|integer',
             'use_external_geocoding' => 'nullable|boolean',
@@ -61,6 +62,7 @@ class MahasiswaController extends Controller
         $validator = Validator::make($payload, [
             'nama' => 'sometimes|required|string|max:255',
             'alamat' => 'sometimes|nullable|string',
+            'angkatan' => 'sometimes|required|integer|min:2000|max:' . ((int) date('Y') + 1),
             'diubah_oleh_user_id' => 'sometimes|nullable|integer',
             'use_external_geocoding' => 'nullable|boolean',
         ]);
@@ -71,7 +73,7 @@ class MahasiswaController extends Controller
 
         $validated = $validator->validated();
 
-        $updatableFields = ['nama', 'alamat', 'diubah_oleh_user_id'];
+        $updatableFields = ['nama', 'alamat', 'angkatan', 'diubah_oleh_user_id'];
         $hasUpdatableField = false;
 
         foreach ($updatableFields as $field) {

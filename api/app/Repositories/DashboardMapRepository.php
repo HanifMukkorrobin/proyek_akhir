@@ -27,6 +27,7 @@ class DashboardMapRepository
         $parentId = $this->normalizeNullableString($filters['parent_id'] ?? null);
         $limit = $this->normalizeLimit($filters['limit'] ?? null, 1000);
         $excludeInvalid = filter_var($filters['exclude_invalid'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $angkatan = $this->resolveAngkatanFilter($filters);
 
         if ($parentId !== null && strlen($parentId) >= $length) {
             throw new InvalidArgumentException('parent_id harus berada di level yang lebih tinggi dari level titik yang diminta.');
@@ -53,6 +54,8 @@ class DashboardMapRepository
         if ($excludeInvalid) {
             $aggregate->where('is_valid_address', true);
         }
+
+        $this->applyAngkatanFilterToQuery($aggregate, $angkatan);
 
         $aggregate->groupByRaw("LEFT(wilayah_id, {$length})");
 
@@ -122,6 +125,8 @@ class DashboardMapRepository
         $query = Mahasiswa::query()
             ->with('wilayah')
             ->where('wilayah_id', 'like', $wilayahId . '%');
+        $angkatan = $this->resolveAngkatanFilter($filters);
+        $this->applyAngkatanFilterToQuery($query, $angkatan);
 
         $excludeInvalid = filter_var($filters['exclude_invalid'] ?? false, FILTER_VALIDATE_BOOLEAN);
         if ($excludeInvalid) {
@@ -181,6 +186,8 @@ class DashboardMapRepository
             ->orderBy('nama')
             ->orderBy('mahasiswa_id')
             ->limit($limit);
+        $angkatan = $this->resolveAngkatanFilter($filters);
+        $this->applyAngkatanFilterToQuery($query, $angkatan);
 
         if ($wilayahId !== null) {
             $query->where('wilayah_id', 'like', $wilayahId . '%');
@@ -245,6 +252,7 @@ class DashboardMapRepository
             'mahasiswa_id' => $mahasiswa->mahasiswa_id,
             'nama' => $mahasiswa->nama,
             'alamat' => $mahasiswa->alamat,
+            'angkatan' => $mahasiswa->angkatan,
             'wilayah_id' => $mahasiswa->wilayah_id,
             'latitude' => $latitude ?? $wilayahLatitude,
             'longitude' => $longitude ?? $wilayahLongitude,
@@ -317,6 +325,37 @@ class DashboardMapRepository
                 max($minLng, $maxLng),
             ]);
         }
+    }
+
+    private function resolveAngkatanFilter(array $filters): ?int
+    {
+        $value = $filters['angkatan'] ?? $filters['tahun'] ?? null;
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        if (!preg_match('/^\d{4}$/', trim((string) $value))) {
+            return null;
+        }
+
+        $year = (int) $value;
+        $maxYear = (int) date('Y') + 1;
+
+        if ($year < 2000 || $year > $maxYear) {
+            return null;
+        }
+
+        return $year;
+    }
+
+    private function applyAngkatanFilterToQuery($query, ?int $angkatan): void
+    {
+        if ($angkatan === null) {
+            return;
+        }
+
+        $query->where('angkatan', $angkatan);
     }
 
     private function resolveLevelKey($level, $zoom): string

@@ -14,11 +14,13 @@ class DashboardController extends Controller
         $this->repository = $repository;
     }
 
-    public function getSummary()
+    public function getSummary(Request $request)
     {
+        $angkatan = $this->resolveAngkatanFilter($request);
+
         return response()->json([
             'code' => 200,
-            'data' => $this->repository->getSummary(),
+            'data' => $this->repository->getSummary($angkatan),
             'message' => 'Success',
             'errors' => new \stdClass()
         ]);
@@ -53,9 +55,11 @@ class DashboardController extends Controller
             $limit = null;
         }
 
+        $angkatan = $this->resolveAngkatanFilter($request);
+
         return response()->json([
             'code' => 200,
-            'data' => $this->repository->getChartData($groupBy, $limit),
+            'data' => $this->repository->getChartData($groupBy, $limit, $angkatan),
             'message' => 'Success',
             'errors' => new \stdClass()
         ]);
@@ -65,12 +69,35 @@ class DashboardController extends Controller
     {
         $parentId = $request->query('parent_id', '');
         $rootLevel = $request->query('root_level', 'root');
+        $angkatan = $this->resolveAngkatanFilter($request);
         
         return response()->json([
             'code' => 200,
-            'data' => $this->repository->getWilayahTree($parentId, $rootLevel),
+            'data' => $this->repository->getWilayahTree($parentId, $rootLevel, $angkatan),
             'message' => 'Success',
             'errors' => new \stdClass()
         ]);
+    }
+
+    private function resolveAngkatanFilter(Request $request): ?int
+    {
+        $value = $request->query('angkatan', $request->query('tahun'));
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        if (!preg_match('/^\d{4}$/', trim((string) $value))) {
+            return null;
+        }
+
+        $year = (int) $value;
+        $maxYear = (int) date('Y') + 1;
+
+        if ($year < 2000 || $year > $maxYear) {
+            return null;
+        }
+
+        return $year;
     }
 }

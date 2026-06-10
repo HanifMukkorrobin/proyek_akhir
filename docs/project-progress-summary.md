@@ -3,7 +3,7 @@
 - Project: GeoVisit PJJ IT
 - Judul: Implementasi Visualisasi Persebaran Data Menggunakan Peta 3D dan Simulasi Rute Efisien Visitasi Dosen ke Rumah Mahasiswa.
 - Studi kasus: Persebaran domisili mahasiswa PJJ IT PENS Angkatan 2023.
-- Last updated: 2026-05-17
+- Last updated: 2026-06-10
 - Sumber ringkasan: repository state, `PROJECT_STATUS.md`, `TASKS.md`, dan hasil pembahasan dokumentasi pada sesi sebelumnya.
 
 ## Latar Belakang
@@ -22,7 +22,7 @@
 - Data tabel tidak cukup untuk menunjukkan konsentrasi mahasiswa pada level provinsi, kabupaten/kota, kecamatan, atau desa.
 - Belum tersedia alur terpadu untuk manajemen mahasiswa, wilayah, user, import data, log aktivitas, dashboard, dan peta 3D.
 - Data alamat yang gagal diklasifikasikan dapat mengganggu akurasi statistik dan visualisasi jika tidak ditandai dengan jelas.
-- Simulasi rute visitasi dosen belum memiliki aturan bisnis final, seperti titik awal, batas kunjungan, durasi visitasi, prioritas, dan objektif optimasi.
+- Simulasi rute visitasi dosen sudah memiliki MVP berbasis OSRM, tetapi aturan lanjutan seperti batas kunjungan, durasi visitasi, prioritas, dan jadwal dosen belum final.
 - Ketergantungan pada geocoding eksternal tidak cocok untuk bulk import besar tanpa cache atau provider yang mendukung batch processing.
 
 ## Solusi
@@ -37,7 +37,9 @@
 - Menampilkan dashboard non-admin untuk dosen/mahasiswa dengan ringkasan, grafik, dan hierarki wilayah.
 - Menyediakan peta 3D berbasis CesiumJS untuk marker wilayah, marker mahasiswa, pencarian, drilldown, dan fokus kamera.
 - Menandai data lokasi bermasalah menggunakan `is_valid_address` dan `geocoding_status` agar tidak mencemari statistik non-admin.
-- Menyediakan fondasi dokumentasi untuk simulasi rute visitasi dosen, termasuk rancangan ERD, DFD, dan use case.
+- Menyediakan simulasi rute visitasi dosen berbasis OSRM, termasuk schema visitasi, modal pembuatan simulasi, sidebar riwayat/detail/hapus, dan rendering polyline pada peta 3D.
+- Simulasi rute default menghitung jalur tertutup: titik keberangkatan, mahasiswa terpilih, lalu kembali ke titik keberangkatan.
+- Simulasi rute membandingkan urutan input dan urutan optimasi OSRM berdasarkan jarak serta waktu tempuh.
 
 ## Batasan Masalah
 
@@ -47,8 +49,8 @@
 - Geocoding internal menjadi sumber utama; Nominatim hanya fallback opsional.
 - Data alamat kosong atau ambigu ditandai sebagai perlu review, bukan dipaksakan menjadi lokasi valid.
 - Statistik dan peta non-admin mengecualikan data dengan alamat tidak valid.
-- Simulasi rute visitasi masih tahap rancangan/fondasi; aturan optimasi final belum ditentukan.
-- Sistem belum menetapkan kontrak final untuk output rute, metode optimasi, dan batasan operasional visitasi.
+- Simulasi rute visitasi tersedia sebagai MVP berbasis koordinat valid mahasiswa dan OSRM.
+- Batasan operasional visitasi lanjutan seperti time window, prioritas, dan kapasitas harian belum diterapkan.
 - Kredensial dan konfigurasi production belum final.
 
 ## Progress Implementasi
@@ -70,6 +72,7 @@
 - Endpoint protected memakai middleware `auth.token`.
 - Response API aktif distandarkan dengan envelope `code`, `data`, `message`, dan `errors`.
 - Pagination helper reusable sudah diterapkan pada endpoint list.
+- Endpoint protected `/visitasi/simulasi-rute` tersedia untuk menghitung, menyimpan, melihat daftar, membuka detail, dan menghapus simulasi rute OSRM milik user.
 
 ### Autentikasi dan Role
 
@@ -121,6 +124,7 @@
 - Dashboard non-admin tersedia di `/dashboard/chart`.
 - Data lokasi tidak valid difilter dari statistik dan tampilan non-admin.
 - Admin dashboard menampilkan card `Data Lokasi Bermasalah` untuk kebutuhan review.
+- Peta 3D dapat membuat simulasi OSRM dari modal, memilih mahasiswa tujuan, memilih titik berangkat/kendaraan, menyimpan hasil, membuka/menghapus riwayat simulasi, dan menggambar geometry sebagai polyline.
 
 ### Activity Log
 
@@ -146,15 +150,24 @@
 - Cesium dimuat melalui static asset `/cesium/Cesium.js` untuk menghindari masalah import Vite.
 - Rendering peta dioptimasi dengan primitive collection, marker limit, request-render mode, payload caching, dan label fading.
 - Marker wilayah dan mahasiswa dapat ditempatkan relatif terhadap terrain height.
+- Geometry rute OSRM dapat dirender sebagai polyline pada peta 3D.
 
 ### Simulasi Rute Visitasi Dosen
 
 - Simulasi rute termasuk dalam scope project dan sudah dimasukkan pada dokumentasi use case, ERD, dan DFD.
-- Fondasi visual pada peta sudah menampilkan konteks visitasi melalui peta 3D dan marker mahasiswa.
-- Rancangan data simulasi yang disarankan mencakup `visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, dan `visitasi_rute_detail`.
-- Business rule simulasi rute belum final.
-- Service dan endpoint simulasi rute belum menjadi implementasi selesai.
-- Metode optimasi, parameter visitasi, integrasi OSRM/routing service, dan format output masih perlu diputuskan.
+- Schema data tersedia melalui `visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, dan `visitasi_rute_detail`.
+- Schema visitasi sudah dinormalisasi agar database lokal dengan kolom legacy tetap kompatibel dengan kontrak simulasi baru.
+- Endpoint `POST /visitasi/simulasi-rute` menggunakan OSRM sebagai provider routing.
+- Endpoint `GET /visitasi/simulasi-rute` dan `GET /visitasi/simulasi-rute/{simulationId}` tersedia untuk daftar dan detail simulasi tersimpan.
+- Endpoint `DELETE /visitasi/simulasi-rute/{simulationId}` tersedia untuk menghapus simulasi tersimpan milik user yang sedang login.
+- OSRM `trip` dipakai untuk optimasi urutan waypoint; OSRM `route` tersedia untuk urutan input tetap.
+- Request OSRM memakai `steps=true`, `geometries=geojson`, `overview=full`, dan `annotations=duration,distance`.
+- Response backend mengembalikan ordered waypoints, ordered mahasiswa, route geometry, legs, leg summaries, steps, dan raw OSRM response.
+- Jika request tidak mengirim `titik_akhir`, backend memakai titik keberangkatan sebagai waypoint akhir agar geometry dan legs mencakup perjalanan pulang.
+- Response backend juga mengembalikan kandidat rute manual vs optimasi, skor efektivitas, rekomendasi, dan penghematan jarak/waktu.
+- Frontend peta 3D menyediakan tombol `Buat Simulasi`, modal input judul/deskripsi/mahasiswa/titik berangkat/kendaraan, dan sidebar riwayat/detail/hapus simulasi.
+- Frontend peta 3D dapat menggambar geometry OSRM dari kandidat terbaik sebagai polyline dan menampilkan perbandingan jarak/waktu di detail simulasi.
+- Business rule lanjutan belum final: time window, prioritas visitasi, batas kunjungan per hari, pengecualian titik akhir eksplisit, dan strategi production OSRM.
 
 ## Route Halaman Frontend
 
@@ -179,10 +192,10 @@
 
 ## Sisa Pekerjaan Utama
 
-- Menentukan aturan bisnis simulasi rute visitasi dosen.
-- Menentukan input, constraint, objective function, dan response contract untuk simulasi rute.
-- Mengimplementasikan service dan endpoint simulasi rute.
-- Menentukan apakah routing menggunakan OSRM, provider eksternal, atau pendekatan heuristik internal.
+- Validasi simulasi OSRM memakai data dummy/seed yang disetujui, bukan koordinat mahasiswa privat.
+- Menentukan strategi production OSRM: self-hosted OSRM atau provider routing yang disetujui.
+- Menambahkan automated test untuk parsing response OSRM, geometry, legs, steps, dan persistence visitasi.
+- Menentukan business rule lanjutan untuk time window, prioritas, batas kunjungan, dan pengecualian titik akhir eksplisit.
 - Menambahkan automated test untuk wilayah endpoint, classifier, CRUD, dashboard, dan import.
 - Menambahkan persistent cache untuk Nominatim jika fallback eksternal tetap digunakan.
 - Menambah alias wilayah berbasis data untuk meningkatkan akurasi klasifikasi alamat.
@@ -201,4 +214,4 @@
 - Peta 3D: selesai untuk visualisasi persebaran.
 - Activity log: selesai.
 - Filtering data lokasi bermasalah: selesai.
-- Simulasi rute visitasi: belum selesai, masih perlu rule set dan implementasi service.
+- Simulasi rute visitasi: alur modal, simpan, riwayat/detail/hapus, rute kembali ke titik awal, pembandingan jarak/waktu, dan rendering OSRM selesai; aturan operasional lanjutan dan production routing masih perlu diputuskan.

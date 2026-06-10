@@ -87,6 +87,7 @@ class MahasiswaRepository
             'mahasiswa_id' => $mahasiswaId,
             'nama' => trim((string) ($payload['nama'] ?? '')),
             'alamat' => $alamat,
+            'angkatan' => $this->normalizeAngkatan($payload['angkatan'] ?? null),
             'wilayah_id' => $geocodingPayload['wilayah_id'],
             'latitude' => $geocodingPayload['latitude'],
             'longitude' => $geocodingPayload['longitude'],
@@ -135,6 +136,10 @@ class MahasiswaRepository
             $mahasiswa->is_valid_address = $geocodingPayload['is_valid_address'] ?? true;
             $mahasiswa->geocoding_status = $geocodingPayload['geocoding_status'] ?? null;
             $geocodingReference = $geocodingPayload['reference'];
+        }
+
+        if (array_key_exists('angkatan', $payload)) {
+            $mahasiswa->angkatan = $this->normalizeAngkatan($payload['angkatan']);
         }
 
         if (array_key_exists('diubah_oleh_user_id', $payload)) {
@@ -269,6 +274,7 @@ class MahasiswaRepository
             try {
                 $nama = (string) ($row['input']['nama'] ?? '');
                 $alamat = (string) ($row['input']['alamat'] ?? '');
+                $angkatan = $this->normalizeAngkatan($row['input']['angkatan'] ?? null);
                 $klasifikasi = $row['hasil_klasifikasi'] ?? [];
 
                 $createdBy = $this->normalizeNullableInt($row['input']['dibuat_oleh_user_id'] ?? null);
@@ -281,6 +287,7 @@ class MahasiswaRepository
                     'mahasiswa_id' => (string) Str::uuid(),
                     'nama' => $nama,
                     'alamat' => $alamat,
+                    'angkatan' => $angkatan,
                     'wilayah_id' => $klasifikasi['wilayah_id'] ?? null,
                     'latitude' => $klasifikasi['latitude'] ?? null,
                     'longitude' => $klasifikasi['longitude'] ?? null,
@@ -294,6 +301,7 @@ class MahasiswaRepository
                     'baris' => $rowNumber,
                     'mahasiswa_id' => $mahasiswa->mahasiswa_id,
                     'nama' => $mahasiswa->nama,
+                    'angkatan' => $mahasiswa->angkatan,
                     'wilayah_id' => $mahasiswa->wilayah_id,
                 ];
             } catch (Throwable $exception) {
@@ -330,9 +338,9 @@ class MahasiswaRepository
     public function generateTemplateXlsx(): string
     {
         $rows = [
-            ['nama', 'alamat'],
-            ['Budi Santoso', 'Jl. Raya Jatibarang, Desa Janegara, Kec. Jatibarang, Kab. Brebes'],
-            ['Siti Aminah', 'Perumahan Tunggulsari Indah, Ds Tunggulsari, Kec. Kedungwaru, Kab. Tulungagung'],
+            ['nama', 'alamat', 'angkatan'],
+            ['Budi Santoso', 'Jl. Raya Jatibarang, Desa Janegara, Kec. Jatibarang, Kab. Brebes', date('Y')],
+            ['Siti Aminah', 'Perumahan Tunggulsari Indah, Ds Tunggulsari, Kec. Kedungwaru, Kab. Tulungagung', date('Y')],
         ];
 
         return $this->buildSimpleXlsx($rows);
@@ -341,9 +349,9 @@ class MahasiswaRepository
     public function generateTemplateCsv(): string
     {
         $rows = [
-            ['nama', 'alamat'],
-            ['Budi Santoso', 'Jl. Raya Jatibarang, Desa Janegara, Kec. Jatibarang, Kab. Brebes'],
-            ['Siti Aminah', 'Perumahan Tunggulsari Indah, Ds Tunggulsari, Kec. Kedungwaru, Kab. Tulungagung'],
+            ['nama', 'alamat', 'angkatan'],
+            ['Budi Santoso', 'Jl. Raya Jatibarang, Desa Janegara, Kec. Jatibarang, Kab. Brebes', date('Y')],
+            ['Siti Aminah', 'Perumahan Tunggulsari Indah, Ds Tunggulsari, Kec. Kedungwaru, Kab. Tulungagung', date('Y')],
         ];
 
         $stream = fopen('php://temp', 'r+');
@@ -466,6 +474,7 @@ class MahasiswaRepository
         $baris = (int) ($row['baris'] ?? 0);
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
+        $angkatan = $this->normalizeAngkatan($row['angkatan'] ?? null);
         $dibuatOlehUserId = $this->normalizeNullableInt($row['dibuat_oleh_user_id'] ?? null);
 
         $alasan = [];
@@ -484,6 +493,10 @@ class MahasiswaRepository
 
         if ($nama === '') {
             $alasan[] = 'Kolom nama wajib diisi.';
+        }
+
+        if ($angkatan === null) {
+            $alasan[] = 'Kolom angkatan wajib berupa tahun valid.';
         }
 
         if (empty($alasan)) {
@@ -549,6 +562,7 @@ class MahasiswaRepository
             'input' => [
                 'nama' => $nama,
                 'alamat' => $alamat,
+                'angkatan' => $angkatan,
                 'dibuat_oleh_user_id' => $dibuatOlehUserId,
             ],
             'status_import' => empty($alasan) ? 'dapat_import' : 'tidak_dapat_import',
@@ -597,7 +611,7 @@ class MahasiswaRepository
             return $this->normalizeHeader((string) $header);
         }, $rawHeaders);
 
-        $requiredHeaders = ['nama', 'alamat'];
+        $requiredHeaders = ['nama', 'alamat', 'angkatan'];
 
         foreach ($requiredHeaders as $requiredHeader) {
             if (!in_array($requiredHeader, $normalizedHeaders, true)) {
@@ -628,6 +642,7 @@ class MahasiswaRepository
                 'baris' => $baris,
                 'nama' => $this->valueFromCsv($values, $headerIndexMap, 'nama'),
                 'alamat' => $this->valueFromCsv($values, $headerIndexMap, 'alamat'),
+                'angkatan' => $this->valueFromCsv($values, $headerIndexMap, 'angkatan'),
                 'dibuat_oleh_user_id' => $this->valueFromCsv($values, $headerIndexMap, 'dibuat_oleh_user_id'),
             ];
         }
@@ -707,7 +722,7 @@ class MahasiswaRepository
             $normalizedHeaders[$index] = $this->normalizeHeader((string) $header);
         }
 
-        $requiredHeaders = ['nama', 'alamat'];
+        $requiredHeaders = ['nama', 'alamat', 'angkatan'];
 
         foreach ($requiredHeaders as $requiredHeader) {
             if (!in_array($requiredHeader, $normalizedHeaders, true)) {
@@ -736,6 +751,7 @@ class MahasiswaRepository
                 'baris' => (int) $row['baris'],
                 'nama' => $this->valueFromCellMap($values, $headerIndexMap, 'nama'),
                 'alamat' => $this->valueFromCellMap($values, $headerIndexMap, 'alamat'),
+                'angkatan' => $this->valueFromCellMap($values, $headerIndexMap, 'angkatan'),
                 'dibuat_oleh_user_id' => $this->valueFromCellMap($values, $headerIndexMap, 'dibuat_oleh_user_id'),
             ];
         }
@@ -834,6 +850,18 @@ class MahasiswaRepository
     private function xlsxWorksheetXml(array $rows): string
     {
         $rowXml = '';
+        $rowCount = max(1, count($rows));
+        $columnCount = max(1, max(array_map('count', $rows ?: [[]])));
+        $lastColumn = $this->columnIndexToName($columnCount - 1);
+        $columnsXml = '<col min="1" max="1" width="28" customWidth="1"/>';
+
+        if ($columnCount >= 2) {
+            $columnsXml .= '<col min="2" max="2" width="92" customWidth="1"/>';
+        }
+
+        if ($columnCount >= 3) {
+            $columnsXml .= '<col min="3" max="' . $columnCount . '" width="14" customWidth="1"/>';
+        }
 
         foreach ($rows as $rowIndex => $row) {
             $excelRow = $rowIndex + 1;
@@ -852,12 +880,12 @@ class MahasiswaRepository
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            . '<dimension ref="A1:B' . max(1, count($rows)) . '"/>'
+            . '<dimension ref="A1:' . $lastColumn . $rowCount . '"/>'
             . '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
             . '<sheetFormatPr defaultRowHeight="15"/>'
-            . '<cols><col min="1" max="1" width="28" customWidth="1"/><col min="2" max="2" width="92" customWidth="1"/></cols>'
+            . '<cols>' . $columnsXml . '</cols>'
             . '<sheetData>' . $rowXml . '</sheetData>'
-            . '<autoFilter ref="A1:B' . max(1, count($rows)) . '"/>'
+            . '<autoFilter ref="A1:' . $lastColumn . $rowCount . '"/>'
             . '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
             . '</worksheet>';
     }
@@ -1078,6 +1106,28 @@ class MahasiswaRepository
         return (int) $text;
     }
 
+    private function normalizeAngkatan($value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+
+        if (!preg_match('/^\d{4}$/', $text)) {
+            return null;
+        }
+
+        $year = (int) $text;
+        $maxYear = (int) date('Y') + 1;
+
+        if ($year < 2000 || $year > $maxYear) {
+            return null;
+        }
+
+        return $year;
+    }
+
     private function buildSelectedSet(?array $selectedRows): ?array
     {
         if ($selectedRows === null || $selectedRows === []) {
@@ -1173,6 +1223,7 @@ class MahasiswaRepository
             'mahasiswa_id' => $mahasiswa->mahasiswa_id,
             'nama' => $mahasiswa->nama,
             'alamat' => $mahasiswa->alamat,
+            'angkatan' => $mahasiswa->angkatan,
             'wilayah_id' => $mahasiswa->wilayah_id,
             'wilayah' => $this->transformWilayah($mahasiswa->wilayah),
             'latitude' => $mahasiswa->latitude,

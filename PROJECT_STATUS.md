@@ -4,7 +4,7 @@
 - Build backend foundation for final project: Implementasi Visualisasi Persebaran Data Menggunakan Peta 3D dan Simulasi Rute Efisien Visitasi Dosen ke Rumah Mahasiswa (Studi Kasus: Persebaran Domisili Mahasiswa PJJ IT PENS Angkatan 2023).
 
 ## Current Phase
-- Backend Foundation Complete + Activity Log UI API Wiring Complete + Non-admin Chart/3D Map Dashboard Complete
+- Backend Foundation Complete + Non-admin Chart/3D Map Dashboard Complete + OSRM Route Simulation Modal/History Complete
 
 ## Summary Status
 - Observed: Lumen 10 project scaffold exists in `api/`.
@@ -88,6 +88,22 @@
 - Observed: 3D map region labels now show `Jumlah Mahasiswa` at every wilayah level, including kecamatan and desa/kelurahan drilldown.
 - Observed: admin views now expose an on-screen theme toggle again, and the remaining admin pages/modals/tables have been normalized to use shared theme-aware tokens instead of hard-coded light surfaces.
 - Observed: the legacy `/admin/dashboard` Highcharts view now re-renders against the active theme palette when dark/light mode changes.
+- Observed: route simulation persistence schema is available through `visitasi_rencana`, `visitasi_peserta`, `visitasi_rute`, and `visitasi_rute_detail`.
+- Observed: local PostgreSQL migrations `2026_06_09_000001_create_visitasi_simulation_tables`, `2026_06_09_000002_add_kendaraan_to_visitasi_rencana`, and `2026_06_09_000003_normalize_visitasi_simulation_columns` have run successfully.
+- Observed: existing local `visitasi_*` tables used a legacy column set; compatibility columns are now added without dropping legacy data.
+- Observed: protected endpoints `GET /visitasi/simulasi-rute`, `GET /visitasi/simulasi-rute/{simulationId}`, and `POST /visitasi/simulasi-rute` are implemented for saved OSRM-backed visit simulation.
+- Observed: route simulation supports OSRM `trip` for optimized waypoint order and OSRM `route` for input order.
+- Observed: OSRM request uses `steps=true`, `geometries=geojson`, `overview=full`, and `annotations=duration,distance`, so response includes route `geometry`, `legs`, and step-level `geometry`.
+- Observed: 3D map dashboard now opens a simulation modal for title, description, mahasiswa selection, departure point, and vehicle option; saved results render OSRM GeoJSON geometry as a Cesium polyline.
+- Observed: 3D map dashboard now provides a simulation history sidebar to list saved simulations, load detail, view waypoint/leg summaries, and re-render stored geometry.
+- Observed: 3D map dashboard now restricts route simulation creation and history sidebar access to non-student roles, and the backend route simulation endpoints reject requests from mahasiswa role.
+- Observed: Route simulation list and detail APIs are now filtered by the authenticated user's ID, showing only simulations created by the logged-in user.
+- Observed: saved route simulations can now be deleted by the authenticated owner/creator through `DELETE /visitasi/simulasi-rute/{simulationId}` and the 3D map history sidebar detail action.
+- Observed: route simulation now defaults to a closed loop from departure point to selected mahasiswa and back to the departure point when no explicit `titik_akhir` is provided.
+- Observed: route simulation now compares manual input order (`route`) against OSRM optimized order (`trip`) using distance and duration, then selects the lower effectiveness score as the active route.
+- Observed: simulation route camera focus now frames the route bounds instead of scaling by OSRM geometry vertex count, preventing zoom-out on detailed polylines.
+- Observed: switching saved simulation details now removes the previous route entity before drawing the newly loaded route, and closing the simulation detail/sidebar clears the active route.
+- Observed: while a simulation route is active, wilayah distribution markers/labels/arcs and region detail panels are hidden so the route view stays focused.
 
 ## Done
 - Created AGENTS.md.
@@ -183,6 +199,20 @@
 - Filtered `is_valid_address=false` from Dashboard statistics, distribution rows, and tree hierarchy.
 - Filtered `is_valid_address=false` from Dashboard Map points and search APIs specifically for non-admin users.
 - Added a new summary card on the Admin Dashboard displaying the total count of 'Data Lokasi Bermasalah' for manual review.
+- Added visitasi simulation database schema for plans, participants, routes, and route details.
+- Added OSRM route simulation repository and protected simulation controller endpoint.
+- Added OSRM environment defaults in `api/.env.example`.
+- Added saved simulation list/detail endpoints for `GET /visitasi/simulasi-rute` and `GET /visitasi/simulasi-rute/{simulationId}`.
+- Added `kendaraan` metadata to `visitasi_rencana` and mapped vehicle choices to OSRM profiles.
+- Added compatibility migration for legacy `visitasi_*` columns so saved simulation detail can load on existing local databases.
+- Reworked 3D map route simulation UI into a create modal plus saved-simulation sidebar, with route geometry rendered as a Cesium polyline after save/detail load.
+- Fixed undefined function `App\Repositories\now()` in route simulation repository by importing and calling `Carbon\Carbon::now()`.
+- Added missing `dibuat_pada` compatibility column to `visitasi_rute_detail` normalization migration and migrated database.
+- Hid route simulation controls, simulation history sidebar access, and student simulation actions from mahasiswa role on the 3D map dashboard, and added corresponding backend role-checks in RouteSimulationController.
+- Filtered route simulation list and detail endpoints in the backend to only return simulations created by the currently authenticated user (retrieved via the Authorization token header).
+- Added owner-scoped delete for saved route simulations, including frontend confirmation modal and active route cleanup after deletion.
+- Configured the Nuxt frontend development server to run on port 3001 inside nuxt.config.ts.
+
 
 ## In Progress
 - None.
@@ -190,8 +220,10 @@
 ## Blockers / Risks
 - Actual production database credentials are unknown.
 - Foreign key constraints are not defined in current database, so model relationships are not auto-generated.
-- Route simulation business rules and optimization constraints are not defined yet.
-- Final route simulation data contract is not defined yet.
+- Advanced visitasi rules are still not implemented: time windows, max visits per day, priority weighting, and lecturer availability.
+- Production OSRM strategy is unknown: public demo server is not appropriate for sustained/private production use; self-hosted OSRM or approved routing provider is needed.
+- Vehicle options beyond driving depend on the configured OSRM server supporting the requested profile (`cycling`, `walking`).
+- Live OSRM verification with real mahasiswa coordinates was not run because it would send private location data to an external service.
 - Frontend production build currently skips `cssnano` minification as compatibility workaround, which may slightly increase CSS output size.
 - `npm install cesium` reported 5 dependency audit findings; no automatic fix was applied.
 - Risk: External geocoding remains unsuitable for large bulk imports unless persistent cache or a non-public/batch-capable provider is added; tracked under API-049.
@@ -207,6 +239,7 @@
 - app/
 - app/app/pages/index.vue
 - app/app/pages/dashboard/chart.vue
+- app/app/pages/dashboard/map.vue
 - app/app/pages/dashbord/map.vue
 - app/app/pages/auth/login.vue
 - app/app/stores/auth.ts
@@ -217,7 +250,16 @@
 - app/.gitignore
 - api/app/Repositories/DashboardRepository.php
 - api/app/Repositories/DashboardMapRepository.php
+- api/app/Repositories/RouteSimulationRepository.php
+- api/app/Http/Controllers/RouteSimulationController.php
+- api/app/Models/VisitasiRencana.php
+- api/app/Models/VisitasiPeserta.php
+- api/app/Models/VisitasiRute.php
+- api/app/Models/VisitasiRuteDetail.php
 - api/database/migrations/2026_05_07_000002_add_dashboard_map_indexes.php
+- api/database/migrations/2026_06_09_000001_create_visitasi_simulation_tables.php
+- api/database/migrations/2026_06_09_000002_add_kendaraan_to_visitasi_rencana.php
+- api/database/migrations/2026_06_09_000003_normalize_visitasi_simulation_columns.php
 - api/app/Http/Controllers/DashboardController.php
 - api/app/Http/Controllers/DashboardMapController.php
 - api/routes/web.php
@@ -225,13 +267,19 @@
 ## Assumptions / Unknowns
 - Assumption: connection in `api/.env` points to active working local DB.
 - Unknown: final production DB host/credential strategy.
-- Unknown: route optimization method and objective function.
-- Unknown: required response schema for final route simulation.
+- Assumption: MVP route optimization uses OSRM `trip` for waypoint order and OSRM `route` for fixed input order, with no explicit `titik_akhir` meaning return to the departure point.
+- Assumption: route effectiveness score uses 70% duration weight and 30% distance weight; lower score is better.
+- Assumption: frontend consumes OSRM GeoJSON coordinates as `[longitude, latitude]` and converts them to Cesium polyline positions.
+- Assumption: vehicle options are stored as app metadata; `mobil`/`motor` use OSRM `driving`, `sepeda` uses `cycling`, and `jalan_kaki` uses `walking`.
+- Unknown: final production OSRM host/provider and privacy policy.
 
 ## Next Recommended Steps
 - Address remaining classifier/geocoding backlog: persist Nominatim cache, add data-driven kabupaten/kota aliases, evaluate phonetic fallback, and move stop-word tuning to config.
 - Validate internal-only import scan against a real 200-row file and review rows marked `needs_review`.
-- Define route simulation inputs, constraints, and expected output.
+- Validate OSRM route simulation modal/sidebar/delete flow with approved dummy/seed test locations, not private mahasiswa coordinates.
+- Decide production OSRM deployment/provider and privacy boundary.
+- Add automated tests for route simulation validation, OSRM response parsing, and persistence path.
+- Extend route simulation rules if needed: time windows, max visits per route, priority weighting, and explicit end-point exceptions.
 - Run browser performance check on `/dashbord/map` with live API data and tune marker limits per device if needed.
 - Validate terrain marker accuracy and loading impact on target internet conditions, since world terrain sampling adds async requests outside the local API.
 - Validate the revised drilldown UX in browser: child levels now require an explicit selected parent region before zoom-driven fetch occurs.
